@@ -1,0 +1,224 @@
+/* ───────── NAV BAR ───────── */
+
+.navBar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 1000;
+
+  height: 96px; /* slightly shorter by default for balance */
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  box-sizing: border-box;
+
+  background: linear-gradient(180deg, #111620, #0d121a);
+  border-bottom: 1px solid #222a36;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 4px 14px rgba(0, 0, 0, 0.25);
+
+  /* Typography polish: crisper rendering + steadier spacing */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.compact {
+  /* optional: applied on scroll */
+  height: 72px;
+  transition: height 180ms ease;
+}
+
+.navLogo {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.navLogo :global(img) {
+  height: 40px;
+  width: auto;
+}
+
+/* Desktop options */
+.navOptions {
+  margin-left: auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Link style */
+.navTitle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 6px;
+
+  color: #eef3ff;
+  text-decoration: none;
+  text-transform: uppercase;
+
+  /* Font stack: keep your brand face if loaded; steadier fallbacks */
+  font-size: 16px;
+  letter-spacing: 0.04em; /* gentler tracking => less “weird” look */
+
+  opacity: 0.9;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    background-size 0.2s ease;
+
+  /* Underline animation with reduced motion fallback */
+  background-image: linear-gradient(#f37021, #f37021);
+  background-repeat: no-repeat;
+  background-position: left calc(100% - 22px);
+  background-size: 0 2px;
+}
+
+.navTitle:hover,
+.navTitle:focus-visible {
+  opacity: 1;
+  background-size: 100% 2px;
+}
+
+/* Active page state */
+.active {
+  color: #ffffff;
+  background-size: 100% 2px;
+}
+
+/* External indicator */
+.extIcon {
+  font-size: 0.85em;
+  margin-left: 6px;
+  opacity: 0.8;
+}
+
+/* Keyboard focus ring */
+.navTitle:focus-visible,
+.menuToggle:focus-visible,
+.mobileItem:focus-visible {
+  outline: 2px solid #ff6900;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Reduced motion: disable underline animation */
+@media (prefers-reduced-motion: reduce) {
+  .navTitle {
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease;
+    background-size: 0 2px !important;
+  }
+  .active {
+    background-size: 100% 2px !important;
+  }
+}
+
+/* ───────── Mobile controls ───────── */
+
+.menuToggle {
+  display: none;
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+
+.burger,
+.burger::before,
+.burger::after {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #eef3ff;
+  margin: 0 auto;
+  border-radius: 2px;
+  position: relative;
+}
+.burger::before {
+  top: -6px;
+  position: relative;
+}
+.burger::after {
+  top: 4px;
+  position: relative;
+}
+
+.mobileMenu {
+  position: fixed;
+  top: var(--nav-height, 96px);
+  right: 12px;
+  left: 12px;
+  transform: translateY(-10px);
+  opacity: 0;
+  pointer-events: none;
+
+  background: #0c1119;
+  border: 1px solid #222a36;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  padding: 8px;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.mobileMenuOpen {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.mobileItem {
+  display: block;
+  padding: 12px 12px;
+  color: #c7d0e4;
+  text-decoration: none;
+  font-size: 15px;
+  border-radius: 6px;
+}
+.mobileItem:hover {
+  color: #eef3ff;
+  background: rgba(243, 112, 33, 0.1);
+}
+
+/* ───────── Responsive ───────── */
+
+@media (max-width: 1024px) {
+  .navTitle {
+    font-size: 14px;
+    background-position: left calc(100% - 14px);
+  }
+}
+
+@media (max-width: 880px) {
+  .navOptions {
+    display: none;
+  }
+  .menuToggle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 720px) {
+  .navBar {
+    height: 60px;
+    padding: 0 12px;
+  }
+  .compact {
+    height: 56px;
+  }
+  .navLogo :global(img) {
+    height: 32px;
+  }
+}
+
+/* Keep spacer in sync with default height */
+.navSpacer {
+  height: 96px;
+}

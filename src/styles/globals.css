@@ -1,0 +1,150 @@
+@font-face {
+  font-family: "trade_gothicBdCnno.20";
+  src:
+    url("/fonts/trade_gothic_bold_condensed_no._20-webfont.woff2")
+      format("woff2"),
+    url("/fonts/trade_gothic_bold_condensed_no._20-webfont.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "trade_gothic_lt_stdlight";
+  src:
+    url("/fonts/trade_gothic_lt_std_light-webfont.woff2") format("woff2"),
+    url("/fonts/trade_gothic_lt_std_light-webfont.woff") format("woff");
+  font-weight: 300; /* if this is the “Light” cut */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "trade_gothicmedium";
+  src:
+    url("/fonts/trade_gothic_medium-webfont.woff2") format("woff2"),
+    url("/fonts/trade_gothic_medium-webfont.woff") format("woff");
+  font-weight: 500; /* if this is the “Medium” cut */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Forza — Book = 400, Bold = 700 */
+@font-face {
+  font-family: "Forza";
+  src:
+    url("/fonts/Forza-Book.woff2") format("woff2"),
+    url("/fonts/Forza-Book.woff") format("woff");
+  font-weight: 400; /* Book */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Forza";
+  src:
+    url("/fonts/Forza-Bold.woff2") format("woff2"),
+    url("/fonts/Forza-Bold.woff") format("woff");
+  font-weight: 700; /* Bold */
+  font-style: normal;
+  font-display: swap;
+}
+
+/* -------------------------
+   Typographic foundation
+   ------------------------- */
+
+:root {
+  --font-sans:
+    "trade_gothic_lt_stdlight", system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-sans-medium:
+    "trade_gothicmedium", system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-condensed:
+    "trade_gothicBdCnno.20", system-ui, -apple-system, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-forza:
+    "Forza", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    sans-serif;
+
+  --fs-base: clamp(11px, 0.85vw, 13px);
+  --fs-sm: calc(var(--fs-base) - 1px);
+  --fs-md: var(--fs-base);
+  --fs-lg: var(--fs-base);
+  --fs-xl: clamp(14px, 1.65vw, 16.5px);
+
+  --lh-tight: 1.25;
+  --lh-base: 1.33; /* tiny nudge tighter */
+  --lh-loose: 1.5;
+
+  --ink: #101318;
+  --ink-2: #334155;
+  --ink-3: #64748b;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* Use a neutral site default so other pages stay light */
+  background: #ffffff; /* ← was #0b1018 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-family: var(--font-forza);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-forza);
+
+  letter-spacing: 0.02em; /* cleaner than default */
+  line-height: var(--lh-tight);
+  margin: 0 0 6px 0;
+}
+
+h1 {
+  font-size: var(--fs-xl);
+}
+h2 {
+  font-size: calc(var(--fs-lg) + 2px);
+}
+h3 {
+  font-size: calc(var(--fs-lg) +1px);
+}
+
+label {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+input,
+select,
+button,
+textarea {
+  font-family: var(--font-forza);
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
+}
+
+pre,
+code,
+.console {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+:root {
+  /* Tree layout tokens */
+  --node-w: 360px;
+  --row-gap: 5px;
+  --stem: 15px;
+}

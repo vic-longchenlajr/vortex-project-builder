@@ -1,0 +1,633 @@
+/* ===============================
+   Home page layout (fixed navbar)
+   =============================== */
+
+.body {
+  --nav-h: 96px;
+  margin-top: var(--nav-h);
+
+  /* Fill full viewport and beyond if content scrolls */
+  min-height: 100vh;
+
+  /* Force the black background all the way down */
+  background: #0b1018;
+  color: #0e1420;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* ========== Generic section shells ========== */
+.section {
+  background: #ffffff;
+  border: 1px solid #e6eaf3;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(13, 18, 26, 0.08);
+  margin: 16px;
+  padding: 28px;
+}
+.sectionFull {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.light {
+  background: #ffffff;
+}
+.dark {
+  background: #0f1521;
+  color: #dfe6ff;
+}
+.black {
+  background: #0b0f17;
+  color: #e8edff;
+}
+
+.sectionHeading {
+  margin: 0 0 14px 0;
+  font-size: 28px;
+  letter-spacing: 0.3px;
+  color: inherit;
+}
+
+/* ========== HERO ========== */
+.hero {
+  position: relative;
+  background: #000; /* pure black to blend with cylinders.png */
+}
+.heroInner {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 24px;
+  align-items: center;
+  padding: 44px 24px 56px;
+}
+.heroCopy {
+  max-width: 720px;
+}
+.heroTitle {
+  margin: 0 0 10px 0;
+  color: #fff;
+  font-size: 42px;
+  letter-spacing: 0.2px;
+  line-height: 1.06;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+.heroSub {
+  margin: 0 0 18px 0;
+  color: #d7dcef;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.ctaRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: #ff6900;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  transition:
+    transform 0.06s ease,
+    box-shadow 0.15s ease;
+  box-shadow: 0 6px 18px rgba(243, 112, 33, 0.35);
+}
+.btnPrimary:active {
+  transform: translateY(0);
+}
+
+.btnGhost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+.btnGhost:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.heroImageWrap {
+  position: relative;
+  width: 100%;
+  min-height: 420px;
+}
+.heroImage {
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Soft fade edge */
+.heroEdge {
+  height: 52px;
+  background: linear-gradient(
+    180deg,
+    #000 0%,
+    rgba(0, 0, 0, 0.6) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* ========== FEATURES ========== */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.card {
+  background: #fbfcff;
+  border: 1px solid #e8edf6;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.06);
+}
+.card h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+}
+.card p {
+  margin: 0;
+  color: #2a3344;
+  line-height: 1.55;
+}
+
+/* ========== ABOUT (split) ========== */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.splitCol {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.bullets {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* ========== RESOURCES TABLE ========== */
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dfe6ff;
+  white-space: normal;
+}
+.table th {
+  background: rgba(255, 255, 255, 0.08);
+  color: #dfe6ff;
+  font-weight: 600;
+}
+.table td {
+  color: #dfe6ff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.table tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.table tbody tr:hover {
+  background: rgba(243, 112, 33, 0.1); /* subtle accent highlight */
+}
+/* Inside your table style */
+.table th:first-child,
+.table td:first-child {
+  white-space: nowrap; /* keep the sheet name on one line */
+}
+
+.table th:nth-child(2),
+.table td:nth-child(2) {
+  white-space: normal;
+}
+
+/* ========== light resources TABLE ========== */
+.tableLight {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.tableLight th,
+.tableLight td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8edf6;
+  white-space: nowrap;
+}
+.tableLight th {
+  background: rgba(255, 255, 255, 0.08);
+  color: black;
+  font-weight: 600;
+}
+.tableLight td {
+  color: black;
+}
+.tableLight tbody tr:nth-child(odd) {
+  background: lightgrey;
+}
+.tableLight tbody tr:hover {
+  background: rgba(243, 112, 33, 0.1); /* subtle accent highlight */
+}
+
+.link {
+  color: #ff6900;
+  text-decoration: none;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ========== CONTACT ========== */
+.contactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.contactHeading {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #0e1420;
+}
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px;
+  margin: 8px 0;
+  color: #0e1420;
+}
+.kv span:first-child {
+  color: #0e1420;
+}
+
+/* Footer */
+.footer {
+  margin-top: 18px;
+  color: #90a1c9;
+  font-size: 12px;
+  text-align: right;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 1100px) {
+  .cardGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .heroInner {
+    grid-template-columns: 1fr;
+  }
+  .heroImageWrap {
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 820px) {
+  .body {
+    --nav-h: 60px;
+  } /* match your mobile navbar height */
+  .section {
+    margin: 10px;
+    padding: 20px;
+    border-radius: 10px;
+  }
+  .sectionHeading {
+    font-size: 22px;
+  }
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+  .heroTitle {
+    font-size: 32px;
+  }
+  .heroSub {
+    font-size: 15px;
+  }
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep anchor targets from hiding under fixed navbar */
+.section,
+#learn-more {
+  scroll-margin-top: calc(var(--nav-h) + 8px);
+}
+/* ===== Burger-stack hierarchy ===== */
+.stackWrap {
+  margin-top: 16px;
+}
+
+/* Project bar that spans both columns */
+.projectBar {
+  grid-column: 1 / -1;
+  margin: 0 auto 10px;
+  width: calc(
+    360px * 2 + 28px
+  ); /* same visual width as two stacks together on desktop */
+  max-width: 92vw;
+  text-align: center;
+}
+
+/* Two side-by-side stacks */
+.stackGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+  justify-items: center;
+}
+
+/* Each vertical stack */
+.stack {
+  width: 360px;
+  max-width: 92vw;
+  display: grid;
+  gap: 12px;
+  position: relative;
+  padding-left: 0; /* no bullets */
+}
+
+/* Subtle vertical line behind steps for “stack” look */
+.stack::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 34px; /* starts just under first card corner */
+  bottom: 34px; /* ends just above last card corner */
+  width: 2px;
+  background: #d9e0ef;
+  border-radius: 2px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* A step = card + short connector nubs above/below */
+.step {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+.step::before,
+.step::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 10px;
+  background: #d9e0ef;
+  border-radius: 2px;
+  z-index: 0;
+}
+.step::before {
+  top: -10px;
+} /* nub up to previous */
+.step::after {
+  bottom: -10px;
+} /* nub down to next */
+
+/* Don’t draw extra nubs for the first and last items */
+.stepTop::before {
+  display: none;
+}
+.stepBottom::after {
+  display: none;
+}
+
+/* Card styles (reuse theme) */
+.node {
+  position: relative;
+  z-index: 1;
+  background: #dfe6ff;
+  border: 1px solid #d9e0ef;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f1521;
+  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.06);
+  width: 100%;
+  text-align: center;
+}
+.nodeStrong {
+  background: #dfe6ff;
+  font-weight: 700;
+}
+.nodePrimary {
+  background: #dfe6ff;
+  color: black;
+  border-color: #0f1521;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+}
+
+/* Multiplicity chip */
+.badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #333d66;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid #d9e0ef;
+}
+
+/* Responsive */
+@media (max-width: 980px) {
+  .projectBar {
+    width: 360px;
+  }
+  .stackGrid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .stack::before {
+    left: 50%;
+  }
+}
+
+.faqNav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.faqNav a {
+  font-size: 0.9rem;
+  text-decoration: none;
+  padding: 6px 10px;
+  border: 1px solid #e6eaf3;
+  border-radius: 999px;
+}
+.faqGrid {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start; /* keep both columns top-aligned */
+}
+.faqGroup {
+  flex: 1 1 0; /* two equal columns */
+  min-width: 0; /* prevents overflow issues */
+  display: grid;
+  gap: 8px;
+}
+
+/* keep the mobile stack */
+@media (max-width: 899px) {
+  .faqGrid {
+    flex-direction: column;
+  }
+}
+.faqGroupTitle {
+  margin: 8px 0;
+  font-size: 1rem;
+  opacity: 0.8;
+}
+.faqItem {
+  border: 1px solid #e6eaf3;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 12px;
+}
+.faqItem > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  outline: none;
+}
+.faqItem[open] > summary {
+  color: #0b5cff;
+}
+.faqItem > summary::-webkit-details-marker {
+  display: none;
+}
+.faqBody {
+  margin-top: 6px;
+  color: #3a4251;
+  line-height: 1.45;
+}
+.workflowImg {
+  width: 80%;
+  max-width: 1200px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Unified Navigator (light section friendly) */
+.guideNav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.navCard {
+  display: block;
+  background: #fff;
+  border: 1px solid #e6eaf3;
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: #0e1420;
+  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.05);
+  transition:
+    transform 80ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+.navCard:hover {
+  transform: translateY(-1px);
+  border-color: #d7dff0;
+  box-shadow: 0 8px 22px rgba(13, 18, 26, 0.08);
+}
+.navCard:active {
+  transform: translateY(0);
+}
+
+.navCardTitle {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.navCardDesc {
+  font-size: 13px;
+  color: #3a4251;
+}
+
+/* Primary CTA card in the grid */
+.navCardPrimary {
+  background: #ff6900;
+  color: #fff;
+  border-color: #ff6900;
+  box-shadow: 0 8px 22px rgba(243, 112, 33, 0.28);
+}
+.navCardPrimary .navCardDesc {
+  color: rgba(255, 255, 255, 0.95);
+}
+.navCardPrimary:hover {
+  filter: brightness(0.98);
+  transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .guideNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 680px) {
+  .guideNav {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Button tweaks for LIGHT sections --- */
+
+/* Keep .btnPrimary as-is (orange). Create a light-friendly outline. */
+.btnOutline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #fff;
+  color: #0e1420;
+  border: 1px solid #e6eaf3;
+  text-decoration: none;
+}
+.btnOutline:hover {
+  border-color: #cfd7ea;
+  background: #fbfcff;
+}
+
+/* If you still use .btnGhost elsewhere on dark sections, keep it. 
+   Use .btnOutline for light sections instead. */

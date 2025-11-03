@@ -1,0 +1,62 @@
+{
+  "name": "vortex-project-configurator",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "next lint",
+    "link": "ln -s /home/weidenhammer/victaulicmobile.com/vortex-bom/  /home/weidenhammer/vortex-bom.victaulicmobile.com/dist/us-config",
+    "build-prod": "next build; ln -s /home/weidenhammer/victaulicmobile.com/vortex-bom/  /home/weidenhammer/vortex-bom.victaulicmobile.com/dist/us-config",
+    "forge:start": "electron-forge start",
+    "forge:make": "electron-forge make",
+    "forge:package": "electron-forge package",
+    "build:web": "next build",
+    "build:desktop": "tsc -p tsconfig.desktop.json",
+    "start:desktop": "npm-run-all -s build:web build:desktop forge:start",
+    "make:desktop": "npm-run-all -s build:web build:desktop forge:make",
+    "package:desktop": "npm-run-all -s build:web build:desktop forge:package"
+  },
+  "dependencies": {
+    "@types/react": "18.2.14",
+    "axios": "^1.12.2",
+    "clsx": "^2.1.1",
+    "eslint": "8.43.0",
+    "eslint-config-next": "13.4.7",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "next": "^13.5.6",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "description": "Victaulic Vortex Project Configurator",
+  "main": ".desktop-dist/main.js",
+  "author": "Victaulic Co. of America",
+  "license": "ISC",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.10.2",
+    "@electron-forge/maker-deb": "^7.10.2",
+    "@electron-forge/maker-dmg": "^7.10.2",
+    "@electron-forge/maker-rpm": "^7.10.2",
+    "@electron-forge/maker-squirrel": "^7.10.2",
+    "@electron-forge/maker-zip": "^7.10.2",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.10.2",
+    "@electron-forge/plugin-fuses": "^7.10.2",
+    "@electron/fuses": "^1.8.0",
+    "@types/file-saver": "^2.0.5",
+    "@types/node": "^20.17.6",
+    "autoprefixer": "^10.4.21",
+    "depcheck": "^1.4.7",
+    "electron": "^38.5.0",
+    "html-to-docx": "^1.8.0",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.9.3"
+  },
+  "browser": {
+    "fs": false,
+    "os": false,
+    "path": false
+  }
+}

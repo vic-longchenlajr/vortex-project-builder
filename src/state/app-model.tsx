@@ -1,0 +1,1491 @@
+// src/state/app-model.tsx
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
+
+import {
+  pickDefaultNozzle,
+  pickDefaultStyle,
+  getStylesFor,
+  MethodName,
+  NozzleCode,
+  EmitterStyleKey,
+} from "@/core/catalog/emitter.catalog";
+import { calculateEngineered } from "@/core/calc/engineered";
+import { calculatePreEngineered } from "@/core/calc/preengineered";
+import { saveAs } from "file-saver";
+
+import {
+  makeSnapshotV1,
+  parseSnapshot,
+  downloadTextFile,
+  readFileAsText,
+} from "@/core/io/project-io";
+
+import { collectBOM } from "@/core/bom/collect-project";
+import { buildWorkbookForProject } from "@/core/bom/excel";
+import { fetchPriceIndex } from "@/core/bom/priceList";
+import type { EngineeredBomBySystem, PriceIndex } from "@/core/bom/types";
+import { exceptions as PRICE_EXCEPTIONS } from "@/core/catalog/parts.constants";
+import { syncPointsFromBOM } from "@/core/bom/facp-sync";
+import {
+  saveTextFileSmart,
+  openTextFileSmart,
+  saveBinaryFileSmart,
+} from "@/core/io/file-bridge";
+
+/* ─────────────────────────────────────────────────────────────
+   TYPES
+   ───────────────────────────────────────────────────────────── */
+
+export type SystemType = "engineered" | "preengineered";
+export type Currency = "USD" | "EUR" | "GBP";
+export type Units = "imperial" | "metric";
+export type Severity = "error" | "warn" | "info";
+export type StatusInput = Omit<StatusMessage, "id">;
+export type PanelSizing = {
+  bore: "1in" | "1.5in";
+  capacity: 1800 | 4500;
+  qty: number;
+  style: "ar" | "dc";
+};
+export type DesignLabel = "data_proc" | "comb_turb" | "spec_hazards";
+
+export type StatusMessage = {
+  id: string;
+  severity: Severity;
+  text: string;
+  code?: string;
+  systemId?: string;
+  zoneId?: string;
+  enclosureId?: string;
+  field?: string;
+};
+
+export type Enclosure = {
+  id: string;
+  name: string;
+  volume: number;
+  tempF: number;
+  method:
+    | "NFPA 770 Class A/C"
+    | "NFPA 770 Class B"
+    | "FM Data Centers"
+    | "FM Turbines"
+    | "FM Machine Spaces";
+
+  length?: number;
+  width?: number;
+  height?: number;
+
+  // was: string | undefined
+  nozzleCode?: NozzleCode;
+  emitterStyle?: EmitterStyleKey;
+  // results...
+  minEmitters?: number;
+  cylinderCount?: number;
+
+  customMinEmitters?: number | null;
+  _editEmitters?: boolean;
+
+  estDischarge?: string;
+  estFinalO2?: string;
+
+  qWater_gpm?: number; // per-nozzle water flow (GPM)
+  qWaterTotal_gpm?: number; // enclosure total water flow (GPM)
+  estWater_gal?: number; // enclosure water discharged (gal)
+};
+
+export type Zone = {
+  id: string;
+  name: string;
+  enclosures: Enclosure[];
+
+  // existing calc outputs
+  minTotalCylinders?: number;
+  totalNitrogen?: string;
+
+  // NEW: user inputs
+  pipeDryVolumeGal?: number;
+  overrideCylinders?: number | null;
+
+  // ui overrides (cylinders)
+  customMinTotalCylinders?: number | null;
+  _editCylinders?: boolean;
+
+  // NEW: calc outputs for BOM/sizing
+  q_n2_peak_scfm?: number;
+  water_peak_gpm?: number;
+  waterDischarge_gal?: number;
+  waterTankMin_gal?: number;
+
+  // NEW: make these official so zone.panelSizing works
+  panelSizing?: PanelSizing;
+  designLabel?: DesignLabel;
+};
+
+export type System = {
+  id: string;
+  name: string;
+  type: SystemType;
+  zones: Zone[];
+  options: SystemOptions;
+};
+
+export type Project = {
+  name: string;
+  firstName: string;
+  lastName: string;
+  companyName: string;
+  projectLocation: string;
+  phone: string;
+  email: string;
+  currency: Currency;
+  units: Units;
+  elevation: string; // e.g. "-3000FT/-0.92KM"
+  systems: System[];
+  customerMultiplier: number;
+};
+
+type SystemAddOnsBase = {
+  placardsAndSignage: boolean;
+  doorCount: number;
+  bulkRefillAdapter: boolean;
+  expProofTransducer: boolean;
+};
+
+export type EngineeredEstimates = {
+  primaryReleaseAssemblies: number;
+  doubleStackedRackHose: number;
+  adjacentRackHose: number;
+  releasePoints: number;
+  monitorPoints: number;
+  batteryBackups: number;
+};
+
+export type PreEstimates = {
+  releasePoints: number;
+  monitorPoints: number;
+};
+
+export type PanelStyle = "ar" | "dc";
+export type RefillAdapter = "CGA-580" | "CGA-677";
+export type WaterTankCert = "ASME/FM" | "CE/ASME/FM" | "CE";
+export type PowerSupply = "120" | "240";
+
+export const FILL_PRESSURES = [
+  "3000 PSI/206.8 BAR",
+  "2900 PSI/199.9 BAR",
+  "2800 PSI/193.1 BAR",
+  "2700 PSI/186.2 BAR",
+  "2640 PSI/182.0 BAR",
+  "2600 PSI/179.3 BAR",
+  "2500 PSI/172.4 BAR",
+  "2400 PSI/165.5 BAR",
+  "2300 PSI/158.6 BAR",
+  "2200 PSI/151.7 BAR",
+  "2100 PSI/144.8 BAR",
+] as const;
+export type FillPressure = (typeof FILL_PRESSURES)[number];
+
+export const PRE_FILL_PRESSURES = [
+  "3000 PSI/206.8 BAR",
+  "2640 PSI/182.0 BAR",
+] as const;
+export type PreFillPressure = (typeof PRE_FILL_PRESSURES)[number];
+
+export type EngineeredOptions = {
+  kind: "engineered";
+  fillPressure: FillPressure;
+  refillAdapter: RefillAdapter | null;
+  waterTank: WaterTankCert | null;
+  powerSupply: PowerSupply | null;
+  panelStyle: PanelStyle;
+  bulkTubes: boolean;
+  rundownTimeMin: number;
+  estimatedPipeVolume?: number; // gal in US units, liters in metric UI (converted in calc)
+  addOns: SystemAddOnsBase & {
+    waterFlexLine: boolean;
+    igsFlexibleHose48: boolean;
+  };
+  editValues: boolean; // UI knobs for overriding calc results
+  estimates: EngineeredEstimates;
+};
+
+export type PreEngineeredOptions = {
+  kind: "preengineered";
+  fillPressure: PreFillPressure;
+  refillAdapter: RefillAdapter | null;
+  waterTank: WaterTankCert | null;
+  powerSupply: PowerSupply | null;
+  addOns: SystemAddOnsBase;
+  editValues: boolean;
+  estimates: PreEstimates;
+};
+
+export type SystemOptions = EngineeredOptions | PreEngineeredOptions;
+
+/* ─────────────────────────────────────────────────────────────
+   CONSTANTS / DEFAULTS
+   ───────────────────────────────────────────────────────────── */
+
+const DEFAULT_PROJECT: Project = {
+  name: "Untitled Project",
+  firstName: "",
+  lastName: "",
+  companyName: "",
+  projectLocation: "",
+  phone: "",
+  email: "",
+  currency: "USD",
+  units: "imperial",
+  elevation: "0FT/0KM",
+  systems: [],
+  customerMultiplier: 1.0,
+};
+
+export function makeEngineeredOptions(): EngineeredOptions {
+  return {
+    kind: "engineered",
+    fillPressure: "3000 PSI/206.8 BAR",
+    refillAdapter: "CGA-580",
+    waterTank: "ASME/FM",
+    powerSupply: "120",
+    panelStyle: "ar",
+    bulkTubes: false,
+    rundownTimeMin: 0,
+    estimatedPipeVolume: 0,
+    addOns: {
+      placardsAndSignage: true,
+      doorCount: 1,
+      bulkRefillAdapter: false,
+      expProofTransducer: false,
+      waterFlexLine: false,
+      igsFlexibleHose48: false,
+    },
+    editValues: false,
+    estimates: {
+      primaryReleaseAssemblies: 0,
+      doubleStackedRackHose: 0,
+      adjacentRackHose: 0,
+      releasePoints: 0,
+      monitorPoints: 0,
+      batteryBackups: 0,
+    },
+  };
+}
+
+export function makePreOptions(): PreEngineeredOptions {
+  return {
+    kind: "preengineered",
+    fillPressure: "3000 PSI/206.8 BAR",
+    refillAdapter: "CGA-580",
+    waterTank: "ASME/FM",
+    powerSupply: "120",
+    addOns: {
+      placardsAndSignage: true,
+      doorCount: 1,
+      bulkRefillAdapter: false,
+      expProofTransducer: false,
+    },
+    editValues: false,
+    estimates: { releasePoints: 0, monitorPoints: 0 },
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ID / SMALL UTILS
+   ───────────────────────────────────────────────────────────── */
+
+function newId(prefix = "id") {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function containsInvalidCharacters(input: string) {
+  const bad = ["*", "?", ":", "\\", "/", "[", "]"];
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    for (let j = 0; j < bad.length; j++) {
+      if (ch === bad[j]) return true;
+    }
+  }
+  return false;
+}
+
+function makeDefaultPreEnclosure(idx = 1): Enclosure {
+  const method: MethodName = "NFPA 770 Class A/C";
+  const nozzle: NozzleCode = pickDefaultNozzle(method);
+  const style: EmitterStyleKey | undefined = coerceStyle(method, nozzle);
+  return {
+    id: newId("enc"),
+    name: `Enclosure ${idx}`,
+    volume: 1000,
+    tempF: 70,
+    method,
+    length: 10,
+    width: 10,
+    height: 10,
+    nozzleCode: nozzle,
+    emitterStyle: style,
+    customMinEmitters: null,
+    _editEmitters: false,
+  };
+}
+
+function makeDefaultPreZone(): Zone {
+  return {
+    id: newId("zone"),
+    name: "Zone 1",
+    enclosures: [makeDefaultPreEnclosure(1)],
+    customMinTotalCylinders: null,
+    _editCylinders: false,
+  };
+}
+
+function firstOrUndef<T>(arr: readonly T[]): T | undefined {
+  return arr.length ? arr[0] : undefined;
+}
+
+function coerceStyle(
+  method: MethodName,
+  nozzle: NozzleCode,
+  candidate?: EmitterStyleKey
+): EmitterStyleKey | undefined {
+  const styles = getStylesFor(method, nozzle); // EmitterStyleKey[]
+  if (candidate && styles.includes(candidate)) return candidate;
+  return firstOrUndef(styles);
+}
+/* ─────────────────────────────────────────────────────────────
+   VALIDATION (CALCULATION-FREE)
+   ───────────────────────────────────────────────────────────── */
+
+function validateProject(project: Project): StatusMessage[] {
+  const msgs: StatusMessage[] = [];
+  const id = () => newId("st");
+
+  // Project meta
+  const missingTop: string[] = [];
+  if (!project.name) missingTop.push("Project Name");
+  if (!project.companyName) missingTop.push("Company Name");
+  if (!project.firstName) missingTop.push("First Name");
+  if (!project.lastName) missingTop.push("Last Name");
+  if (!project.phone) missingTop.push("Phone Number");
+  if (!project.email) missingTop.push("Email Address");
+  if (!project.projectLocation) missingTop.push("Project Location");
+  if (missingTop.length) {
+    msgs.push({
+      id: id(),
+      severity: "error",
+      code: "PROJ.MISSING_FIELDS",
+      text:
+        "Some project fields are incomplete: " +
+        missingTop.join(", ") +
+        ". These are required before submission.",
+    });
+  }
+
+  // Systems
+  for (const sys of project.systems) {
+    if (!sys.name) {
+      msgs.push({
+        id: id(),
+        severity: "error",
+        systemId: sys.id,
+        code: "SYS.MISSING_NAME",
+        text: "System name is empty.",
+      });
+    }
+    if (containsInvalidCharacters(sys.name || "")) {
+      msgs.push({
+        id: id(),
+        severity: "error",
+        systemId: sys.id,
+        code: "SYS.INVALID_CHARS",
+        text: "System names may not include any of: * ? : \\ / [ ]",
+      });
+    }
+    if (sys.zones.length === 0) {
+      msgs.push({
+        id: id(),
+        severity: "error",
+        systemId: sys.id,
+        code: "SYS.NO_ZONES",
+        text: "No zones in this system.",
+      });
+    }
+
+    // Advice: DC for multizone engineered
+    if (
+      sys.type === "engineered" &&
+      sys.zones.length > 1 &&
+      (sys.options as EngineeredOptions).panelStyle !== "dc"
+    ) {
+      msgs.push({
+        id: id(),
+        severity: "warn",
+        systemId: sys.id,
+        code: "SYS.PANEL_MISMATCH",
+        text: "Multi-zone systems should use a Dry Contact panel (DC). Consider switching panel style.",
+      });
+    }
+
+    // FM methods require FM-capable tank
+    const tank = sys.options.waterTank;
+    const hasFMMethod = sys.zones.some((z) =>
+      z.enclosures.some(
+        (e) =>
+          e.method === "FM Data Centers" ||
+          e.method === "FM Turbines" ||
+          e.method === "FM Machine Spaces"
+      )
+    );
+    if (hasFMMethod && tank === "CE") {
+      msgs.push({
+        id: id(),
+        severity: "error",
+        systemId: sys.id,
+        code: "SYS.FM_TANK_REQ",
+        text: "FM design methods require an FM-approved water tank.",
+      });
+    }
+
+    // Zones + enclosures
+    for (const zone of sys.zones) {
+      if (containsInvalidCharacters(zone.name || "")) {
+        msgs.push({
+          id: id(),
+          severity: "error",
+          systemId: sys.id,
+          zoneId: zone.id,
+          code: "ZONE.INVALID_CHARS",
+          text: "Zone names may not include any of: * ? : \\ / [ ]",
+        });
+      }
+
+      msgs.push(...checkUniqueEnclosureNamesInZone(zone, sys.id));
+      msgs.push(...checkZoneDesignMethodCompatibility(zone, sys.id));
+
+      if (zone.enclosures.length === 0) {
+        msgs.push({
+          id: id(),
+          severity: "error",
+          systemId: sys.id,
+          zoneId: zone.id,
+          code: "ZONE.NO_ENCLOSURES",
+          text: "No enclosures in this zone.",
+        });
+        continue;
+      }
+
+      for (const enc of zone.enclosures) {
+        if (!enc.name || !enc.name.trim()) {
+          msgs.push({
+            id: id(),
+            severity: "warn",
+            systemId: sys.id,
+            zoneId: zone.id,
+            enclosureId: enc.id,
+            code: "ENC.MISSING_NAME",
+            text: "Enclosure name is empty.",
+          });
+        } else if (containsInvalidCharacters(enc.name)) {
+          msgs.push({
+            id: id(),
+            severity: "error",
+            systemId: sys.id,
+            zoneId: zone.id,
+            enclosureId: enc.id,
+            code: "ENC.INVALID_CHARS",
+            text: "Enclosure name may not include any of: * ? : \\ / [ ]",
+          });
+        }
+
+        const tMin = project.units === "imperial" ? 40 : 4.4;
+        const tMax = project.units === "imperial" ? 130 : 54.4;
+        const tVal = enc.tempF ?? 70;
+        if (tVal < tMin || tVal > tMax) {
+          msgs.push({
+            id: id(),
+            severity: "error",
+            systemId: sys.id,
+            zoneId: zone.id,
+            enclosureId: enc.id,
+            field: "tempF",
+            code: "ENC.TEMP_RANGE",
+            text: "Temperature must be within 40–130°F (4.4–54.4°C).",
+          });
+        }
+
+        if (sys.type === "engineered") {
+          if (!enc.volume || enc.volume <= 0) {
+            msgs.push({
+              id: id(),
+              severity: "error",
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              field: "volume",
+              code: "ENC.VOLUME_EMPTY",
+              text: "Volume must be a positive, non-zero value.",
+            });
+          }
+        } else {
+          if (
+            (enc.length ?? 0) <= 0 ||
+            (enc.width ?? 0) <= 0 ||
+            (enc.height ?? 0) <= 0
+          ) {
+            msgs.push({
+              id: id(),
+              severity: "error",
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              field: "volume",
+              code: "ENC.VOLUME_EMPTY",
+              text: "Volume must be a positive, non-zero value.",
+            });
+          }
+        }
+
+        // FM-specific volume caps
+        if (enc.method === "FM Data Centers") {
+          const maxFt3 = 31350;
+          const maxM3 = 2912.5;
+          const exceeds =
+            (project.units === "imperial" && (enc.volume || 0) > maxFt3) ||
+            (project.units === "metric" && (enc.volume || 0) > maxM3);
+          if (exceeds) {
+            msgs.push({
+              id: id(),
+              severity: "error",
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              code: "ENC.FMDC_VOLUME_LIMIT",
+              text: "Volume for FM Data Centers may not exceed 31,350 ft³ / 2,912.5 m³.",
+            });
+          }
+        }
+
+        if (
+          enc.method === "FM Turbines" ||
+          enc.method === "FM Machine Spaces"
+        ) {
+          const maxFt3 = 127525;
+          const maxM3 = 3611.1;
+          const exceeds =
+            (project.units === "imperial" && (enc.volume || 0) > maxFt3) ||
+            (project.units === "metric" && (enc.volume || 0) > maxM3);
+          if (exceeds) {
+            msgs.push({
+              id: id(),
+              severity: "error",
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              code: "ENC.FM_VOLUME_LIMIT",
+              text: "Volume for FM Turbines/FM Machine Spaces may not exceed 127,525 ft³ / 3,611.1 m³.",
+            });
+          }
+        }
+      }
+    }
+
+    // Zone name uniqueness inside a system
+    const seen: Record<string, number> = {};
+    for (const z of sys.zones) {
+      const key = (z.name || "").trim().toLowerCase();
+      if (!key) continue;
+      seen[key] = (seen[key] || 0) + 1;
+    }
+    for (const z of sys.zones) {
+      const key = (z.name || "").trim().toLowerCase();
+      if (key && seen[key] > 1) {
+        msgs.push({
+          id: id(),
+          severity: "error",
+          systemId: sys.id,
+          zoneId: z.id,
+          code: "ZONE.DUPLICATE_NAME",
+          text: `Zone names must be unique within a system (duplicate: "${z.name}").`,
+        });
+      }
+    }
+  }
+
+  const seen: Record<string, number> = {};
+  for (const s of project.systems) {
+    const key = (s.name || "").trim().toLowerCase();
+    if (!key) continue;
+    seen[key] = (seen[key] || 0) + 1;
+  }
+  for (const s of project.systems) {
+    const key = (s.name || "").trim().toLowerCase();
+    if (key && seen[key] > 1) {
+      msgs.push({
+        id: id(),
+        severity: "error",
+        systemId: s.id,
+        code: "SYS.DUPLICATE_NAME",
+        text: `System names must be unique across the project (duplicate: "${s.name}").`,
+      });
+    }
+  }
+
+  return msgs;
+}
+
+export function checkUniqueEnclosureNamesInZone(
+  zone: Zone,
+  systemId: string
+): StatusMessage[] {
+  const seen: Record<string, number> = {};
+  for (const enc of zone.enclosures) {
+    const key = (enc.name || "").trim().toLowerCase();
+    if (!key) continue;
+    seen[key] = (seen[key] || 0) + 1;
+  }
+
+  const duplicates: StatusMessage[] = [];
+  for (const enc of zone.enclosures) {
+    const key = (enc.name || "").trim().toLowerCase();
+    if (!key) continue;
+    if (seen[key] > 1) {
+      duplicates.push({
+        id: newId("st"),
+        severity: "error",
+        systemId,
+        zoneId: zone.id,
+        enclosureId: enc.id,
+        code: "ENC.DUPLICATE_NAME",
+        text: `Enclosure names must be unique within a zone (duplicate: "${enc.name}").`,
+      });
+    }
+  }
+  return duplicates;
+}
+
+/** A zone can mix A/C and B only; all other mixes invalid. */
+export function checkZoneDesignMethodCompatibility(
+  zone: Zone,
+  systemId: string
+): StatusMessage[] {
+  if (!zone.enclosures || zone.enclosures.length <= 1) return [];
+  const methods = new Set<Enclosure["method"]>();
+  for (const enc of zone.enclosures) if (enc.method) methods.add(enc.method);
+  if (methods.size <= 1) return [];
+
+  const ALLOWED_MIX = new Set<Enclosure["method"]>([
+    "NFPA 770 Class A/C",
+    "NFPA 770 Class B",
+  ]);
+  const allAllowed = Array.from(methods).every((m) => ALLOWED_MIX.has(m));
+  if (allAllowed) return [];
+
+  return [
+    {
+      id: newId("st"),
+      severity: "error",
+      systemId,
+      zoneId: zone.id,
+      code: "ZONE.DM_MISMATCH",
+      text:
+        "Enclosures sharing a nitrogen source must also have the same design discharge times. The following design methods are incompatible: " +
+        Array.from(methods).join(", ") +
+        ".",
+    },
+  ];
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CONTEXT API
+   ───────────────────────────────────────────────────────────── */
+
+type Model = {
+  project: Project;
+
+  // Project meta
+  updateProject: (patch: Partial<Project>) => void;
+
+  // Create
+  addSystem: (type: SystemType) => void;
+  addZone: (systemId: string) => void;
+  addEnclosure: (systemId: string, zoneId: string) => void;
+
+  // Update
+  updateSystem: (systemId: string, patch: Partial<System>) => void;
+  updateSystemOptions: (
+    systemId: string,
+    patch: Partial<SystemOptions>
+  ) => void;
+  changeSystemType: (systemId: string, type: SystemType) => void;
+  updateZone: (systemId: string, zoneId: string, patch: Partial<Zone>) => void;
+  updateEnclosure: (
+    systemId: string,
+    zoneId: string,
+    enclosureId: string,
+    patch: Partial<Enclosure>
+  ) => void;
+
+  // Remove
+  removeSystem: (systemId: string) => void;
+  removeZone: (systemId: string, zoneId: string) => void;
+  removeEnclosure: (
+    systemId: string,
+    zoneId: string,
+    enclosureId: string
+  ) => void;
+
+  // Actions
+  runCalculateEngineered: () => void;
+  runCalculatePreEngineered: () => void;
+  runCalculateAll: () => void;
+
+  // Status
+  status: StatusMessage[];
+  addStatus: (m: StatusInput | StatusInput[]) => void;
+  clearStatus: (scope?: {
+    systemId?: string;
+    zoneId?: string;
+    enclosureId?: string;
+  }) => void;
+  runValidate: () => void;
+
+  // Derived
+  hasErrors: boolean;
+
+  // Import/Export
+  exportProjectToFile: () => void;
+  importProjectFromFile: (file: File) => Promise<void>;
+  triggerImportFilePicker: () => void;
+
+  // BOM/Price
+  generateEngineeredBOM: () => Promise<void>;
+  priceIndexReady: boolean;
+  projectListPrice: number | null;
+
+  // NEW
+  clearProject: () => void;
+};
+
+const AppModelContext = createContext<Model | null>(null);
+
+/* ─────────────────────────────────────────────────────────────
+   PROVIDER
+   ───────────────────────────────────────────────────────────── */
+
+export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
+  const [status, setStatus] = useState<StatusMessage[]>([]);
+
+  // Price index + live price
+  const [priceIndex, setPriceIndex] = useState<PriceIndex | null>(null);
+  const [priceIndexReady, setPriceIndexReady] = useState(false);
+  const [projectListPrice, setProjectListPrice] = useState<number | null>(null);
+
+  /* ---------- Find helpers ---------- */
+  const findSystemIndex = (sid: string) =>
+    project.systems.findIndex((s) => s.id === sid);
+  const findZoneIndex = (sidx: number, zid: string) =>
+    project.systems[sidx].zones.findIndex((z) => z.id === zid);
+  const findEnclosureIndex = (sidx: number, zidx: number, eid: string) =>
+    project.systems[sidx].zones[zidx].enclosures.findIndex((e) => e.id === eid);
+
+  /* ---------- Status helpers ---------- */
+  const addStatus: Model["addStatus"] = (m) => {
+    const arr = Array.isArray(m) ? m : [m];
+    setStatus((prev) => [
+      ...prev,
+      ...arr.map((x) => ({ ...x, id: newId("st") })),
+    ]);
+  };
+
+  const clearStatus: Model["clearStatus"] = (scope) => {
+    if (!scope) return setStatus([]);
+    setStatus((msgs) =>
+      msgs.filter((m) => {
+        const matchSystem = scope.systemId
+          ? m.systemId === scope.systemId
+          : true;
+        const matchZone = scope.zoneId ? m.zoneId === scope.zoneId : true;
+        const matchEnc = scope.enclosureId
+          ? m.enclosureId === scope.enclosureId
+          : true;
+        return !(matchSystem && matchZone && matchEnc);
+      })
+    );
+  };
+
+  const runValidate = () => {
+    setStatus(validateProject(project));
+  };
+
+  /* ---------- Project CRUD ---------- */
+  // ---------- Clear Project ----------
+  const clearProject: Model["clearProject"] = () => {
+    if (!confirm("Clear the entire project and reset all fields?")) return;
+
+    // wipe autosave so it doesn't immediately restore the old state
+    try {
+      localStorage.removeItem("vortex:autosave");
+    } catch {
+      /* ignore */
+    }
+
+    // clear UI state
+    setStatus([]);
+    setProjectListPrice(null);
+
+    // reset to defaults
+    setProject(DEFAULT_PROJECT);
+  };
+
+  const updateProject: Model["updateProject"] = (patch) =>
+    setProject((p) => ({ ...p, ...patch }));
+
+  const addSystem: Model["addSystem"] = (type) => {
+    setProject((p) => ({
+      ...p,
+      systems: [
+        ...p.systems,
+        {
+          id: newId("sys"),
+          name: `System ${p.systems.length + 1}`,
+          type,
+          zones: type === "preengineered" ? [makeDefaultPreZone()] : [],
+          options:
+            type === "engineered" ? makeEngineeredOptions() : makePreOptions(),
+        },
+      ],
+    }));
+  };
+
+  const addZone: Model["addZone"] = (systemId) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const sys = p.systems[sidx];
+
+      // Pre-engineered: only one zone allowed
+      if (sys.type === "preengineered" && sys.zones.length >= 1) return p;
+
+      const next: System = {
+        ...sys,
+        zones: [
+          ...sys.zones,
+          {
+            id: newId("zone"),
+            name: `Zone ${sys.zones.length + 1}`,
+            enclosures: [],
+            customMinTotalCylinders: null,
+            _editCylinders: false,
+          },
+        ],
+      };
+      const systems = [...p.systems];
+      systems[sidx] = next;
+      return { ...p, systems };
+    });
+  };
+
+  const addEnclosure: Model["addEnclosure"] = (systemId, zoneId) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const zidx = findZoneIndex(sidx, zoneId);
+      if (zidx < 0) return p;
+
+      const sys = p.systems[sidx];
+      const zone = sys.zones[zidx];
+
+      if (sys.type === "preengineered" && zone.enclosures.length >= 1) return p;
+
+      const m: MethodName = "NFPA 770 Class A/C";
+      const nz: NozzleCode = pickDefaultNozzle(m);
+      const st: EmitterStyleKey | undefined = coerceStyle(m, nz);
+      const enc: Enclosure = {
+        id: newId("enc"),
+        name: `Enclosure ${zone.enclosures.length + 1}`,
+        volume: 1000,
+        tempF: 70,
+        method: m,
+        nozzleCode: nz,
+        emitterStyle: st,
+        customMinEmitters: null,
+        _editEmitters: false,
+      };
+
+      const zones = [...sys.zones];
+      zones[zidx] = { ...zone, enclosures: [...zone.enclosures, enc] };
+
+      const systems = [...p.systems];
+      systems[sidx] = { ...sys, zones };
+
+      return { ...p, systems };
+    });
+  };
+
+  const updateSystem: Model["updateSystem"] = (systemId, patch) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const systems = [...p.systems];
+      systems[sidx] = { ...systems[sidx], ...patch };
+      return { ...p, systems };
+    });
+  };
+
+  const updateSystemOptions: Model["updateSystemOptions"] = (
+    systemId,
+    patch
+  ) => {
+    setProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
+      if (sidx < 0) return p;
+
+      const current = p.systems[sidx];
+      const nextOptions = {
+        ...(current.options as any),
+        ...(patch as any),
+      } as SystemOptions;
+
+      // deep merge addOns if provided
+      if ((patch as any)?.addOns) {
+        (nextOptions as any).addOns = {
+          ...(current.options as any).addOns,
+          ...(patch as any).addOns,
+        };
+      }
+      (nextOptions as any).kind = (current.options as any).kind; // preserve kind
+
+      const systems = [...p.systems];
+      systems[sidx] = { ...current, options: nextOptions };
+      return { ...p, systems };
+    });
+  };
+
+  const changeSystemType: Model["changeSystemType"] = (systemId, type) => {
+    setProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
+      if (sidx < 0) return p;
+
+      const current = p.systems[sidx];
+      const nextZones =
+        type === "preengineered" ? [makeDefaultPreZone()] : current.zones;
+
+      const systems = [...p.systems];
+      systems[sidx] = {
+        ...current,
+        type,
+        zones: nextZones,
+        options:
+          type === "engineered" ? makeEngineeredOptions() : makePreOptions(),
+      };
+
+      return { ...p, systems };
+    });
+  };
+
+  const updateZone: Model["updateZone"] = (systemId, zoneId, patch) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const zidx = findZoneIndex(sidx, zoneId);
+      if (zidx < 0) return p;
+
+      const zones = [...p.systems[sidx].zones];
+      zones[zidx] = { ...zones[zidx], ...patch };
+
+      const systems = [...p.systems];
+      systems[sidx] = { ...p.systems[sidx], zones };
+
+      return { ...p, systems };
+    });
+  };
+
+  const updateEnclosure: Model["updateEnclosure"] = (
+    systemId,
+    zoneId,
+    eid,
+    patch
+  ) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const zidx = findZoneIndex(sidx, zoneId);
+      if (zidx < 0) return p;
+      const eidx = findEnclosureIndex(sidx, zidx, eid);
+      if (eidx < 0) return p;
+
+      const zone = p.systems[sidx].zones[zidx];
+      const old = zone.enclosures[eidx];
+      let next: Enclosure = { ...old, ...patch };
+
+      // 1) Method changed → reset nozzle & style to valid defaults
+      if (patch.method && patch.method !== old.method) {
+        const m = next.method as MethodName;
+        const nz: NozzleCode = pickDefaultNozzle(m);
+        next.nozzleCode = nz;
+        next.emitterStyle = coerceStyle(m, nz);
+      }
+
+      // 2) Nozzle changed → ensure style is valid for (method, nozzle)
+      if (patch.nozzleCode && patch.nozzleCode !== old.nozzleCode) {
+        const m = (next.method as MethodName) ?? (old.method as MethodName);
+        const nz = next.nozzleCode as NozzleCode; // asserted after patch
+        next.emitterStyle = coerceStyle(m, nz, next.emitterStyle);
+      }
+
+      // 3) Style changed → ensure it belongs to current (method, nozzle)
+      if (patch.emitterStyle && patch.emitterStyle !== old.emitterStyle) {
+        const m = (next.method as MethodName) ?? (old.method as MethodName);
+        const nz =
+          (next.nozzleCode as NozzleCode) ?? (old.nozzleCode as NozzleCode);
+        // If the incoming style isn't valid, snap to the first valid style
+        next.emitterStyle = coerceStyle(
+          m,
+          nz,
+          patch.emitterStyle as EmitterStyleKey
+        );
+      }
+
+      const enclosures = [...zone.enclosures];
+      enclosures[eidx] = next;
+
+      const zones = [...p.systems[sidx].zones];
+      zones[zidx] = { ...zone, enclosures };
+
+      const systems = [...p.systems];
+      systems[sidx] = { ...p.systems[sidx], zones };
+
+      return { ...p, systems };
+    });
+  };
+
+  /* ---------- Remove ---------- */
+  const removeSystem: Model["removeSystem"] = (systemId) => {
+    setProject((p) => ({
+      ...p,
+      systems: p.systems.filter((s) => s.id !== systemId),
+    }));
+  };
+
+  const removeZone: Model["removeZone"] = (systemId, zoneId) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const sys = p.systems[sidx];
+      const zones = sys.zones.filter((z) => z.id !== zoneId);
+      const systems = [...p.systems];
+      systems[sidx] = { ...sys, zones };
+      return { ...p, systems };
+    });
+  };
+
+  const removeEnclosure: Model["removeEnclosure"] = (systemId, zoneId, eid) => {
+    setProject((p) => {
+      const sidx = findSystemIndex(systemId);
+      if (sidx < 0) return p;
+      const zidx = findZoneIndex(sidx, zoneId);
+      if (zidx < 0) return p;
+
+      const zone = p.systems[sidx].zones[zidx];
+      const enclosures = zone.enclosures.filter((e) => e.id !== eid);
+
+      const zones = [...p.systems[sidx].zones];
+      zones[zidx] = { ...zone, enclosures };
+
+      const systems = [...p.systems];
+      systems[sidx] = { ...p.systems[sidx], zones };
+
+      return { ...p, systems };
+    });
+  };
+
+  /* ---------- Pricing / BOM helpers ---------- */
+  async function ensurePriceIndex(): Promise<PriceIndex> {
+    if (priceIndex) return priceIndex;
+    const idx = await fetchPriceIndex(undefined, PRICE_EXCEPTIONS);
+    setPriceIndex(idx);
+    setPriceIndexReady(true);
+    return idx;
+  }
+
+  async function computeProjectListPrice(p: Project): Promise<number> {
+    const idx = await ensurePriceIndex();
+    const bySystem: EngineeredBomBySystem = collectBOM(p);
+    let total = 0;
+
+    // Avoid downlevel iteration: use Object.values + Map.forEach
+    Object.values(bySystem).forEach(({ bom }) => {
+      bom.forEach((line) => {
+        const entry =
+          idx[line.partcode] || (line.alt ? idx[line.alt] : undefined);
+        const unit = entry?.listPrice ?? 0;
+        total += unit * (line.qty || 0);
+      });
+    });
+
+    return total;
+  }
+
+  async function recomputeProjectListPrice(p: Project) {
+    try {
+      const total = await computeProjectListPrice(p);
+      setProjectListPrice(Number.isFinite(total) ? total : null);
+    } catch {
+      setProjectListPrice(null);
+    }
+  }
+
+  /* ---------- Actions (Calculate) ---------- */
+  const runCalculateEngineered: Model["runCalculateEngineered"] = () => {
+    setStatus([]);
+    const pre = validateProject(project);
+
+    const { project: nextProject, messages: runtime = [] } =
+      calculateEngineered(project);
+
+    // 🔁 Reconcile UI point estimates to the BOM (unless editValues)
+    const reconciled = syncPointsFromBOM(nextProject);
+
+    setProject(reconciled);
+
+    const runtimeWithIds = runtime.map((m) => ({ ...m, id: newId("st") }));
+    const msgs = [...pre, ...runtimeWithIds];
+    setStatus(msgs);
+
+    const blocked = msgs.some((m) => m.severity === "error");
+    if (!blocked) {
+      void recomputeProjectListPrice(reconciled);
+    } else {
+      setProjectListPrice(null);
+    }
+  };
+  const runCalculatePreEngineered: Model["runCalculatePreEngineered"] = () => {
+    setStatus([]);
+    const pre = validateProject(project);
+    const { project: nextProject, messages: runtime = [] } =
+      calculatePreEngineered(project);
+    setProject(nextProject);
+    const runtimeWithIds = runtime.map((m) => ({ ...m, id: newId("st") }));
+    const msgs = [...pre, ...runtimeWithIds];
+    setStatus(msgs);
+
+    const blocked = msgs.some((m) => m.severity === "error");
+    if (!blocked) {
+      void recomputeProjectListPrice(nextProject); // ✅ update totals
+    } else {
+      setProjectListPrice(null);
+    }
+  };
+  const runCalculateAll: Model["runCalculateAll"] = () => {
+    setStatus([]);
+    const pre = validateProject(project);
+
+    const eng = calculateEngineered(project);
+    const engSynced = syncPointsFromBOM(eng.project);
+    const pree = calculatePreEngineered(engSynced);
+    setProject(pree.project);
+
+    const msgs = [
+      ...pre,
+      ...(eng.messages ?? []).map((m) => ({ ...m, id: newId("st") })),
+      ...(pree.messages ?? []).map((m) => ({ ...m, id: newId("st") })),
+    ];
+    setStatus(msgs);
+
+    const blocked = msgs.some((m) => m.severity === "error");
+    if (!blocked) {
+      void recomputeProjectListPrice(pree.project);
+    } else {
+      setProjectListPrice(null);
+    }
+  };
+
+  const hasErrors = status.some((m) => m.severity === "error");
+
+  /* ---------- Import/Export ---------- */
+  const exportProjectToFile: Model["exportProjectToFile"] = () => {
+    const snap = makeSnapshotV1(project);
+    const safeName = (project?.name || "Untitled").replace(/[^\w\-]+/g, "_");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `VortexProject_${safeName}_${stamp}.json`;
+    // Try Electron (saves to Downloads by default), fall back to current web method:
+    void saveTextFileSmart(filename, JSON.stringify(snap, null, 2), {
+      filterJson: true,
+    }).then((ok) => {
+      if (!ok) {
+        // fallback to your existing browser download
+        const blob = new Blob([JSON.stringify(snap, null, 2)], {
+          type: "application/json;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    });
+  };
+
+  const importProjectFromFile: Model["importProjectFromFile"] = async (
+    file
+  ) => {
+    const text = await readFileAsText(file);
+    try {
+      const snap = parseSnapshot(text);
+      if (!snap?.project || typeof snap.project !== "object") {
+        throw new Error("Imported file has no project payload.");
+      }
+      setProject(snap.project as Project);
+      addStatus({
+        severity: "info",
+        text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
+      });
+    } catch (err: any) {
+      addStatus({
+        severity: "error",
+        text: err?.message || "Import failed. File may be incompatible.",
+      });
+      throw err;
+    }
+  };
+
+  // Hidden file input (imperative trigger)
+  const hiddenInputRef = useRef<HTMLInputElement | null>(null);
+  const triggerImportFilePicker: Model["triggerImportFilePicker"] =
+    async () => {
+      // Try Electron native Open dialog first
+      const text = await openTextFileSmart({ filterJson: true });
+      if (text) {
+        try {
+          const snap = parseSnapshot(text);
+          if (!snap?.project || typeof snap.project !== "object") {
+            throw new Error("Imported file has no project payload.");
+          }
+          setProject(snap.project as Project);
+          addStatus({
+            severity: "info",
+            text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
+          });
+          return;
+        } catch (err: any) {
+          addStatus({
+            severity: "error",
+            text: err?.message || "Import failed. File may be incompatible.",
+          });
+          // fall through to web picker
+        }
+      }
+      // Fallback to the hidden <input type=file> (web)
+      hiddenInputRef.current?.click();
+    };
+
+  const HiddenFileInput = (
+    <input
+      ref={hiddenInputRef}
+      type="file"
+      accept="application/json"
+      style={{ display: "none" }}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+        const input = e.currentTarget;
+        const file = input.files?.[0];
+        if (!file) return;
+        (async () => {
+          try {
+            await importProjectFromFile(file);
+          } finally {
+            input.value = "";
+          }
+        })();
+      }}
+    />
+  );
+
+  /* ---------- Autosave ---------- */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("vortex:autosave");
+      if (!raw) return;
+      const snap = parseSnapshot(raw);
+      if (snap?.project) setProject(snap.project as Project);
+    } catch {
+      /* ignore bad autosave */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const autosaveTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(() => {
+      try {
+        const snap = makeSnapshotV1(project);
+        localStorage.setItem("vortex:autosave", JSON.stringify(snap));
+      } catch {
+        /* ignore */
+      }
+    }, 400);
+    return () => {
+      if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    };
+  }, [project]);
+
+  /* ---------- BOM Excel generation ---------- */
+  const projectNetPrice = useMemo(() => {
+    const mult = Math.min(
+      1,
+      Math.max(0, Number(project.customerMultiplier ?? 1))
+    );
+    return projectListPrice == null ? null : projectListPrice * mult;
+  }, [projectListPrice, project.customerMultiplier]);
+
+  // Generate BOM (EXCEL)
+  async function generateEngineeredBOM() {
+    // guard: don’t generate if there are blocking errors
+    if (hasErrors) return;
+
+    const idx = await ensurePriceIndex();
+    const wb = await buildWorkbookForProject({
+      project,
+      priceIndex: idx,
+      options: {
+        currency: project.currency,
+        multiplier: Math.min(
+          1,
+          Math.max(0, Number(project.customerMultiplier ?? 1))
+        ),
+      },
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const fnameSafe = (project.name || "Project").replace(/[^\w\-]+/g, "_");
+    const bytes = new Uint8Array(buffer as ArrayBuffer);
+
+    // Try Electron native Save dialog first
+    const saved = await saveBinaryFileSmart(`${fnameSafe}.xlsx`, bytes, {
+      filterXlsx: true,
+    });
+    if (!saved) {
+      // Fallback to browser download (current behavior)
+      saveAs(
+        new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        `${fnameSafe}.xlsx`
+      );
+    }
+  }
+
+  /* ---------- Context value ---------- */
+  const value = useMemo<Model>(
+    () => ({
+      project,
+
+      updateProject,
+
+      addSystem,
+      addZone,
+      addEnclosure,
+
+      updateSystem,
+      updateSystemOptions,
+      changeSystemType,
+      updateZone,
+      updateEnclosure,
+
+      removeSystem,
+      removeZone,
+      removeEnclosure,
+
+      runCalculateEngineered,
+      runCalculatePreEngineered,
+      runCalculateAll,
+
+      status,
+      addStatus,
+      clearStatus,
+      runValidate,
+      hasErrors,
+
+      exportProjectToFile,
+      importProjectFromFile,
+      triggerImportFilePicker,
+
+      generateEngineeredBOM,
+      priceIndexReady,
+      projectListPrice,
+      projectNetPrice,
+
+      clearProject,
+    }),
+    [
+      project,
+      status,
+      hasErrors,
+      priceIndexReady,
+      projectListPrice,
+      projectNetPrice,
+
+      updateProject,
+
+      addSystem,
+      addZone,
+      addEnclosure,
+
+      updateSystem,
+      updateSystemOptions,
+      changeSystemType,
+      updateZone,
+      updateEnclosure,
+
+      removeSystem,
+      removeZone,
+      removeEnclosure,
+
+      runCalculateEngineered,
+      runCalculatePreEngineered,
+      runCalculateAll,
+
+      addStatus,
+      clearStatus,
+      runValidate,
+
+      exportProjectToFile,
+      importProjectFromFile,
+      triggerImportFilePicker,
+
+      generateEngineeredBOM,
+      clearProject,
+    ]
+  );
+
+  return (
+    <AppModelContext.Provider value={value}>
+      {HiddenFileInput}
+      {children}
+    </AppModelContext.Provider>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────
+   HOOK
+   ───────────────────────────────────────────────────────────── */
+
+export function useAppModel() {
+  const ctx = useContext(AppModelContext);
+  if (!ctx) throw new Error("useAppModel must be used inside AppModelProvider");
+  return ctx;
+}

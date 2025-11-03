@@ -1,0 +1,714 @@
+/* ============ Layout ============ */
+.container {
+  padding: 24px;
+
+  /* design tokens (scoped for CSS Modules purity) */
+  --brand-accent: #ff6900;
+
+  --sys-eng: #2563eb; /* blue */
+  --sys-pre: #0ea5a1; /* teal */
+  --sys-eng-tint: #e8f0ff;
+  --sys-pre-tint: #e6fffb;
+
+  --surface-muted: #f8fafc;
+  --surface-warn: #fff7ed;
+  --surface-ok: #f0fdf4;
+
+  --ink-3: #0f172a;
+  --ink-2: #475569;
+
+  --line-1: #e5e7eb;
+  --header-1: #f1f5f9;
+
+  --shadow-1:
+    0 1px 2px rgba(16, 24, 40, 0.08), 0 1px 1px rgba(16, 24, 40, 0.06);
+  --ring: 0 0 0 3px rgba(241, 90, 34, 0.2);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.nav {
+  display: flex;
+  gap: 12px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 200px minmax(640px, 1fr) 220px;
+  gap: 24px;
+  align-items: start;
+}
+
+.sticky {
+  position: sticky;
+  top: 16px;
+}
+.leftCol {
+}
+.midCol {
+}
+.rightCol {
+}
+
+/* ============ Cards / sections ============ */
+.section {
+  border: 1px solid #e3e6ef;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-1);
+}
+
+.priceCard {
+  display: grid;
+  gap: 8px;
+}
+.priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.priceTitle {
+  margin: 0 0 6px 0;
+}
+.priceValue {
+  font-weight: 700;
+}
+
+.builderTitle {
+  margin: 0 0 12px;
+  font-size: var(--fs-xl);
+}
+.addBar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Project Options */
+.poGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: 10px;
+}
+.poLabel {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  text-align: left;
+  display: block;
+  margin-bottom: 2px;
+  line-height: var(--lh-tight);
+}
+.poControl {
+  width: 100%;
+  font-size: var(--fs-md);
+  line-height: var(--lh-tight);
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+/* ============ System & Zone ============ */
+.sysCard {
+  border: 1px solid #e3e6ef;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: #fff;
+  border-left: 6px solid transparent;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.sysCard--eng {
+  border-left-color: var(--sys-eng);
+}
+.sysCard--pre {
+  border-left-color: var(--sys-pre);
+}
+
+/* Slim header band + badge */
+.sysHeader {
+  height: 6px;
+  margin: -12px -12px 12px -12px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04), transparent 45%);
+  position: relative;
+}
+.sysBadge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  background: #fff;
+  box-shadow: var(--shadow-1);
+}
+.sysBadge--eng {
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1e3a8a;
+  background: var(--sys-eng-tint);
+}
+.sysBadge--pre {
+  border-color: rgba(14, 165, 161, 0.35);
+  color: #0f766e;
+  background: var(--sys-pre-tint);
+}
+
+.controlsRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.actionsRight {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.zoneCard {
+  border: 1px solid var(--line-1);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  background: #fff;
+}
+.zoneHeader {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+/* Quick zone metrics */
+.zoneMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  background: #fff;
+}
+
+.resultsHeader {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 8px 0 6px;
+}
+
+/* Tinted section helpers */
+.section--muted {
+  background: var(--surface-muted);
+}
+.section--warn {
+  background: var(--surface-warn);
+}
+.section--ok {
+  background: var(--surface-ok);
+}
+
+/* Status console helpers (if your StatusConsole needs them) */
+.statusCard {
+  display: grid;
+  gap: 8px;
+}
+.statusHeader {
+  margin: 0;
+}
+.console {
+  background: #0b1220;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  min-height: 96px;
+}
+
+/* ============ Tables ============ */
+.enclosureTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.enclosureTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+  background: #fff;
+  border: 1px solid #e3e6ef;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-1);
+}
+.enclosureTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--header-1);
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e3e6ef;
+  white-space: nowrap;
+  backdrop-filter: saturate(120%) blur(2px);
+}
+.enclosureTable thead th:nth-child(2) {
+  text-align: left;
+}
+.enclosureTable tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f2f8;
+  vertical-align: middle;
+}
+.encIndexCell,
+.enclosureTable thead th:first-child,
+.enclosureTable tbody td:first-child {
+  width: 40px;
+  text-align: center;
+  white-space: nowrap;
+}
+.enclosureTable thead th:last-child,
+.enclosureTable tbody td:last-child {
+  width: 48px;
+  text-align: center;
+}
+
+.enclosureTable input,
+.enclosureTable select,
+.enclosureTable button {
+  font-size: 13px;
+  line-height: 1.2;
+  padding: 4px 6px;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.enclosureTable td:nth-child(2) input[type="text"],
+.inputMd {
+  width: 160px;
+}
+.enclosureTable .inputSm {
+  width: 84px;
+  text-align: right;
+}
+.enclosureTable .inputXs {
+  width: 53px;
+  text-align: right;
+}
+.styleSelect {
+  min-width: 140px;
+  max-width: 160px;
+}
+.nozzleSelect {
+  min-width: 230px;
+  max-width: 280px;
+}
+.enclosureTable td select {
+  max-width: 260px;
+}
+
+.enclosureTable tbody tr:nth-child(odd) {
+  background: #fbfcff;
+}
+.enclosureTable tbody tr:hover {
+  background: #eef4ff;
+}
+.enclosureTable select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Results Grid + Table */
+.resultsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.resultsTable {
+  width: 100%;
+  border: 1px solid #e3e6ef;
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  font-size: 13px;
+  overflow: hidden;
+  table-layout: auto;
+  box-shadow: var(--shadow-1);
+}
+.resultsTable thead th {
+  background: var(--header-1);
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e3e6ef;
+  white-space: nowrap;
+}
+.resultsTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f2f8;
+}
+.resultsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+.resultsTable tbody tr:nth-child(even) {
+  background: #fbfcff;
+}
+.resultsTable td:first-child {
+  color: var(--ink-2);
+}
+.resultsTable td.num,
+.resultsTable td.right {
+  text-align: right;
+  white-space: nowrap;
+}
+.resultsTable td.center {
+  text-align: center;
+}
+.resultsTable td.right,
+.resultsTable td.center,
+.kvValue {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Key/Value rows */
+.kvLabel {
+  white-space: nowrap;
+}
+.kvValue {
+  font-weight: 400;
+  text-align: right;
+}
+
+/* PRE-ENGINEERED table specifics */
+.preTable thead th {
+  text-align: left;
+}
+.preTable thead th:nth-child(2) {
+  text-align: left;
+}
+.preNozzleSelect {
+  min-width: 260px;
+  max-width: 340px;
+}
+.preTable .inputXs {
+  width: 53px;
+  text-align: right;
+}
+.preTable tbody td {
+  padding: 6px 8px;
+}
+
+.dimCell {
+  width: 96px;
+  vertical-align: top;
+}
+.dimStack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.dimRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+.dimRow small {
+  width: 10px;
+  text-align: right;
+  color: var(--ink-2);
+  font-size: 11px;
+}
+.dimInput {
+  width: 58px;
+  text-align: right;
+  padding: 3px 6px;
+  height: 26px;
+}
+
+.preTable .preNozzleSelect,
+.preTable .preStyleSelect {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+.preTable thead th:nth-child(7) {
+  text-align: left;
+}
+
+/* Select + pill inline helper */
+.selectWithPill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============ Buttons ============ */
+.btn {
+  --btn-bg: #fff;
+  --btn-fg: var(--ink-3);
+  --btn-br: 8px;
+  --btn-bd: var(--line-1);
+
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--btn-bd);
+  border-radius: var(--btn-br);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 80ms ease;
+}
+.btn:hover {
+  background: #f9fafb;
+}
+.btn:active {
+  transform: translateY(0.5px);
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  --btn-bg: var(--brand-accent);
+  --btn-fg: #fff;
+  --btn-bd: transparent;
+  color: #fff;
+}
+.btnPrimary:hover {
+  filter: brightness(0.96);
+}
+
+/* very light tinted buttons for secondary actions */
+.btnSoft {
+  background: #f8fafc;
+  border-color: var(--line-1);
+}
+.btnSoft:hover {
+  background: #f3f5f8;
+}
+
+/* contextual soft tints for add-system buttons */
+.btnSoftEng {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #1e3a8a;
+}
+.btnSoftEng:hover {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.btnSoftPre {
+  background: rgba(14, 165, 161, 0.1);
+  border-color: rgba(14, 165, 161, 0.25);
+  color: #0f766e;
+}
+.btnSoftPre:hover {
+  background: rgba(14, 165, 161, 0.14);
+}
+
+/* destructive */
+.btnDanger {
+  --btn-bg: #fff1f2;
+  --btn-fg: #b91c1c;
+  --btn-bd: #fecaca;
+}
+.btnDanger:hover {
+  background: #ffe4e6;
+}
+
+/* icon-only or tiny action */
+.btnIcon {
+  height: 28px;
+  width: 28px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* stacks */
+.btnStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ============ Project Navigator ============ */
+.navList {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.navListNested {
+  list-style: none;
+  padding-left: 12px;
+  margin: 6px 0 0 0;
+}
+.navItem {
+  margin-bottom: 6px;
+}
+.navItemSmall {
+  margin-bottom: 4px;
+}
+
+.navBtn,
+.navBtnSub,
+.navBtnLeaf {
+  display: inline-block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e3e6ef;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.navBtn {
+  padding: 6px 8px;
+}
+.navBtnSub {
+  padding: 4px 8px;
+  font-size: 0.95rem;
+}
+.navBtnLeaf {
+  padding: 3px 8px;
+  font-size: 0.9rem;
+}
+
+.flash {
+  animation: targetFlash 1.2s ease-out 1;
+}
+@keyframes targetFlash {
+  0% {
+    box-shadow: 0 0 0 2px rgba(255, 200, 0, 0.9) inset;
+    background: #fffbe6;
+  }
+  100% {
+    box-shadow: none;
+    background: inherit;
+  }
+}
+
+/* ============ Misc ============ */
+.stack-tight > * + * {
+  margin-top: 8px;
+}
+.muted {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.readOnlyCell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .resultsGrid {
+    grid-template-columns: 1fr;
+  }
+  .enclosureTableWrap {
+    overflow-x: auto;
+  }
+}
+
+/* Pills (already used for method labels) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  background: #fff;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.pill--fm {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #eef6ff;
+}
+.pill--nfpa-ac {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #f8fafc;
+}
+.pill--nfpa-b {
+  border-color: #c4b5fd;
+  color: #6d28d9;
+  background: #f5f3ff;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: var(--line-1);
+  margin: 8px 0;
+}
+
+/* Enclosure Results: LEFT align checkbox + number */
+.enclosureResults td:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* left */
+  gap: 8px;
+}
+
+/* Make the emitters number left-aligned for visual consistency */
+.enclosureResults input[type="number"] {
+  text-align: left;
+}
+
+/* Zone Results: RIGHT align checkbox + number */
+.zoneResults td:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* right */
+  gap: 8px;
+}

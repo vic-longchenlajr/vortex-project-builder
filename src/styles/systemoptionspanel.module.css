@@ -1,0 +1,152 @@
+/* src/styles/systemoptionspanel.module.css */
+
+/* PANEL */
+.panel {
+  border: 1px dashed #e1e5ef;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0 12px;
+  background: #fafbff;
+}
+
+.title {
+  display: block;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  font-size: var(--fs-lg);
+}
+
+/* FORM CONTROLS */
+.control,
+.controlXS,
+.panel select,
+.panel input[type="number"],
+.panel input[type="text"] {
+  font-size: var(--fs-md);
+  line-height: var(--lh-tight);
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+/* SECTION HEADERS */
+.subhead {
+  font-size: var(--fs-md);
+  margin: 4px 0 6px;
+}
+
+/* ADD-ONS */
+.addons {
+  display: grid;
+  gap: 8px;
+}
+
+.blockCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-md);
+}
+
+.checkRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.doorCount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ESTIMATES */
+.estimateCol {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.estimateGroup {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e5e8f1;
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.editToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: var(--fs-md);
+}
+
+/* RESPONSIVE */
+@media (max-width: 1000px) {
+  .cols3 {
+    grid-template-columns: 1fr;
+  }
+  .colLeft {
+    grid-template-columns: 150px auto;
+  }
+}
+
+/* Normal controls cap width so they don't sprawl */
+.control {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* Door Count + estimate inputs: ~2 digits wide */
+.controlXS,
+.estimateRow input[type="number"] {
+  /* was 5ch / 50px */
+  width: 7ch; /* ~3 digits + spinner comfortably */
+  min-width: 72px;
+  text-align: right; /* or left if you prefer */
+}
+
+/* Responsive */
+@media (max-width: 1080px) {
+  .cols3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Make the first panel column narrower overall */
+.cols3 {
+  display: grid;
+  grid-template-columns: 0.9fr 1fr 1fr; /* was ~1.1–1.25fr for the first col */
+  gap: 12px 14px;
+  align-items: start;
+}
+
+/* Left column: tighter control track */
+.colLeft {
+  display: grid;
+  grid-template-columns: max-content minmax(150px, 220px); /* was up to 280–360px */
+  gap: 8px 8px;
+  align-items: center;
+}
+.colLeft label {
+  white-space: nowrap;
+}
+
+/* Default controls: slimmer cap */
+.control {
+  width: 100%;
+  max-width: 220px; /* was 280–500px */
+}
+
+/* Keep estimate label one line; tiny input on right */
+.estimateRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}

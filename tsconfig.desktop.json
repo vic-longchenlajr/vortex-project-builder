@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "rootDir": ".desktop",
+    "outDir": ".desktop-dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "lib": ["ES2020"],
+    "types": ["node"], // <- keep React/@types out of this build
+    "skipLibCheck": true // <- avoids checking node_modules .d.ts
+  },
+  "include": [".desktop/**/*"],
+  "exclude": ["node_modules", "src"] // <- explicitly exclude your web src
+}
