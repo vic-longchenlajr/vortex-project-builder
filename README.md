@@ -83,7 +83,7 @@ If you need to locate where the app was installed:
 ## 🧭 Repository Information
 
 **Repository Name:** `victaulic-vortex-project-configurator`  
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **License:** Internal Use – Victaulic Fire Suppression Technology  
 **Maintainer:** Fire Suppression Engineering – Easton, PA
 
