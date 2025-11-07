@@ -45,13 +45,19 @@
 
 .sticky {
   position: sticky;
-  top: 16px;
+  top: 20px;
 }
 .leftCol {
-}
-.midCol {
+  position: sticky;
+  bottom: 20px; /* gap from viewport bottom */
+  align-self: start; /* ensure sticky works inside the grid */
 }
 .rightCol {
+  position: sticky;
+  top: calc(var(--nav-height, 56px) + 40px);
+  align-self: start; /* ensures sticky works inside CSS grid */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto; /* right column contents can scroll independently */
 }
 
 /* ============ Cards / sections ============ */

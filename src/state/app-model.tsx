@@ -31,13 +31,15 @@ import { collectBOM } from "@/core/bom/collect-project";
 import { buildWorkbookForProject } from "@/core/bom/excel";
 import { fetchPriceIndex } from "@/core/bom/priceList";
 import type { EngineeredBomBySystem, PriceIndex } from "@/core/bom/types";
-import { exceptions as PRICE_EXCEPTIONS } from "@/core/catalog/parts.constants";
 import { syncPointsFromBOM } from "@/core/bom/facp-sync";
 import {
   saveTextFileSmart,
   openTextFileSmart,
   saveBinaryFileSmart,
 } from "@/core/io/file-bridge";
+
+import type { ErrorCode } from "@/core/status/error-codes";
+import { statusFromCode } from "@/core/status/error-codes";
 
 /* ─────────────────────────────────────────────────────────────
    TYPES
@@ -60,7 +62,7 @@ export type StatusMessage = {
   id: string;
   severity: Severity;
   text: string;
-  code?: string;
+  code?: ErrorCode; // ← tighten the type
   systemId?: string;
   zoneId?: string;
   enclosureId?: string;
@@ -135,6 +137,25 @@ export type System = {
   type: SystemType;
   zones: Zone[];
   options: SystemOptions;
+  /** System-level summary for UI “System Totals” */
+  systemTotals?: SystemTotals;
+};
+
+export type SystemTotals = {
+  // Governing sources
+  governingNitrogenZoneId?: string | null;
+  governingWaterZoneId?: string | null;
+  // Core totals
+  totalCylinders: number; // from zone with MOST cylinders
+  totalNitrogen_scf: number; // from zone with LARGEST N2 requirement
+  dischargePanels_qty: number; // sum of zone panelSizing.qty
+  waterTankRequired_gal: number; // max zone waterTankMin_gal
+  waterRequirement_gal: number; // max zone waterDischarge_gal
+  waterTankPick?: string;
+  // FACP estimates (already computed per system)
+  estReleasePoints: number;
+  estMonitorPoints: number;
+  estBatteryBackups: number;
 };
 
 export type Project = {
@@ -204,6 +225,7 @@ export type EngineeredOptions = {
   fillPressure: FillPressure;
   refillAdapter: RefillAdapter | null;
   waterTank: WaterTankCert | null;
+  waterTankCertification?: "US_ASME_FM" | "US_ASME_CE_FM" | "CE_SS316L";
   powerSupply: PowerSupply | null;
   panelStyle: PanelStyle;
   bulkTubes: boolean;
@@ -214,6 +236,7 @@ export type EngineeredOptions = {
     igsFlexibleHose48: boolean;
   };
   editValues: boolean; // UI knobs for overriding calc results
+  _editEstimates?: Partial<Record<keyof EngineeredEstimates, boolean>>;
   estimates: EngineeredEstimates;
 };
 
@@ -222,10 +245,12 @@ export type PreEngineeredOptions = {
   fillPressure: PreFillPressure;
   refillAdapter: RefillAdapter | null;
   waterTank: WaterTankCert | null;
+  waterTankCertification?: "US_ASME_FM" | "US_ASME_CE_FM" | "CE_SS316L";
   powerSupply: PowerSupply | null;
   addOns: SystemAddOnsBase;
   editValues: boolean;
   estimates: PreEstimates;
+  _editEstimates?: Partial<Record<keyof PreEstimates, boolean>>;
 };
 
 export type SystemOptions = EngineeredOptions | PreEngineeredOptions;
@@ -255,6 +280,7 @@ export function makeEngineeredOptions(): EngineeredOptions {
     fillPressure: "3000 PSI/206.8 BAR",
     refillAdapter: "CGA-580",
     waterTank: "ASME/FM",
+    waterTankCertification: undefined,
     powerSupply: "120",
     panelStyle: "ar",
     bulkTubes: false,
@@ -286,6 +312,8 @@ export function makePreOptions(): PreEngineeredOptions {
     fillPressure: "3000 PSI/206.8 BAR",
     refillAdapter: "CGA-580",
     waterTank: "ASME/FM",
+    waterTankCertification: undefined,
+
     powerSupply: "120",
     addOns: {
       placardsAndSignage: true,
@@ -295,6 +323,7 @@ export function makePreOptions(): PreEngineeredOptions {
     },
     editValues: false,
     estimates: { releasePoints: 0, monitorPoints: 0 },
+    _editEstimates: {},
   };
 }
 
@@ -380,12 +409,7 @@ function validateProject(project: Project): StatusMessage[] {
   if (missingTop.length) {
     msgs.push({
       id: id(),
-      severity: "error",
-      code: "PROJ.MISSING_FIELDS",
-      text:
-        "Some project fields are incomplete: " +
-        missingTop.join(", ") +
-        ". These are required before submission.",
+      ...statusFromCode("PROJ.MISSING_FIELDS", {}, { fields: missingTop }),
     });
   }
 
@@ -394,28 +418,19 @@ function validateProject(project: Project): StatusMessage[] {
     if (!sys.name) {
       msgs.push({
         id: id(),
-        severity: "error",
-        systemId: sys.id,
-        code: "SYS.MISSING_NAME",
-        text: "System name is empty.",
+        ...statusFromCode("SYS.MISSING_NAME", { systemId: sys.id }),
       });
     }
     if (containsInvalidCharacters(sys.name || "")) {
       msgs.push({
         id: id(),
-        severity: "error",
-        systemId: sys.id,
-        code: "SYS.INVALID_CHARS",
-        text: "System names may not include any of: * ? : \\ / [ ]",
+        ...statusFromCode("SYS.INVALID_CHARS", { systemId: sys.id }),
       });
     }
     if (sys.zones.length === 0) {
       msgs.push({
         id: id(),
-        severity: "error",
-        systemId: sys.id,
-        code: "SYS.NO_ZONES",
-        text: "No zones in this system.",
+        ...statusFromCode("SYS.NO_ZONES", { systemId: sys.id }),
       });
     }
 
@@ -427,10 +442,7 @@ function validateProject(project: Project): StatusMessage[] {
     ) {
       msgs.push({
         id: id(),
-        severity: "warn",
-        systemId: sys.id,
-        code: "SYS.PANEL_MISMATCH",
-        text: "Multi-zone systems should use a Dry Contact panel (DC). Consider switching panel style.",
+        ...statusFromCode("SYS.PANEL_MISMATCH", { systemId: sys.id }),
       });
     }
 
@@ -447,10 +459,7 @@ function validateProject(project: Project): StatusMessage[] {
     if (hasFMMethod && tank === "CE") {
       msgs.push({
         id: id(),
-        severity: "error",
-        systemId: sys.id,
-        code: "SYS.FM_TANK_REQ",
-        text: "FM design methods require an FM-approved water tank.",
+        ...statusFromCode("SYS.FM_TANK_REQ", { systemId: sys.id }),
       });
     }
 
@@ -459,11 +468,10 @@ function validateProject(project: Project): StatusMessage[] {
       if (containsInvalidCharacters(zone.name || "")) {
         msgs.push({
           id: id(),
-          severity: "error",
-          systemId: sys.id,
-          zoneId: zone.id,
-          code: "ZONE.INVALID_CHARS",
-          text: "Zone names may not include any of: * ? : \\ / [ ]",
+          ...statusFromCode("ZONE.INVALID_CHARS", {
+            systemId: sys.id,
+            zoneId: zone.id,
+          }),
         });
       }
 
@@ -473,11 +481,10 @@ function validateProject(project: Project): StatusMessage[] {
       if (zone.enclosures.length === 0) {
         msgs.push({
           id: id(),
-          severity: "error",
-          systemId: sys.id,
-          zoneId: zone.id,
-          code: "ZONE.NO_ENCLOSURES",
-          text: "No enclosures in this zone.",
+          ...statusFromCode("ZONE.NO_ENCLOSURES", {
+            systemId: sys.id,
+            zoneId: zone.id,
+          }),
         });
         continue;
       }
@@ -486,52 +493,60 @@ function validateProject(project: Project): StatusMessage[] {
         if (!enc.name || !enc.name.trim()) {
           msgs.push({
             id: id(),
-            severity: "warn",
-            systemId: sys.id,
-            zoneId: zone.id,
-            enclosureId: enc.id,
-            code: "ENC.MISSING_NAME",
-            text: "Enclosure name is empty.",
+            ...statusFromCode("ENC.MISSING_NAME", {
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+            }),
           });
         } else if (containsInvalidCharacters(enc.name)) {
           msgs.push({
             id: id(),
-            severity: "error",
-            systemId: sys.id,
-            zoneId: zone.id,
-            enclosureId: enc.id,
-            code: "ENC.INVALID_CHARS",
-            text: "Enclosure name may not include any of: * ? : \\ / [ ]",
+            ...statusFromCode("ENC.INVALID_CHARS", {
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+            }),
           });
         }
 
         const tMin = project.units === "imperial" ? 40 : 4.4;
         const tMax = project.units === "imperial" ? 130 : 54.4;
-        const tVal = enc.tempF ?? 70;
-        if (tVal < tMin || tVal > tMax) {
+        const tRaw = enc.tempF;
+        if (tRaw == null || Number.isNaN(tRaw)) {
           msgs.push({
             id: id(),
-            severity: "error",
-            systemId: sys.id,
-            zoneId: zone.id,
-            enclosureId: enc.id,
-            field: "tempF",
-            code: "ENC.TEMP_RANGE",
-            text: "Temperature must be within 40–130°F (4.4–54.4°C).",
+            ...statusFromCode("ENC.TEMP_REQUIRED", {
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              field: "tempF",
+            }),
           });
+        } else {
+          // 2) Range check only if it's actually a number
+          if (tRaw < tMin || tRaw > tMax) {
+            msgs.push({
+              id: id(),
+              ...statusFromCode("ENC.TEMP_RANGE", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+                field: "tempF",
+              }),
+            });
+          }
         }
-
         if (sys.type === "engineered") {
           if (!enc.volume || enc.volume <= 0) {
             msgs.push({
               id: id(),
-              severity: "error",
-              systemId: sys.id,
-              zoneId: zone.id,
-              enclosureId: enc.id,
-              field: "volume",
-              code: "ENC.VOLUME_EMPTY",
-              text: "Volume must be a positive, non-zero value.",
+              ...statusFromCode("ENC.VOLUME_EMPTY", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+                field: "volume",
+              }),
             });
           }
         } else {
@@ -542,13 +557,12 @@ function validateProject(project: Project): StatusMessage[] {
           ) {
             msgs.push({
               id: id(),
-              severity: "error",
-              systemId: sys.id,
-              zoneId: zone.id,
-              enclosureId: enc.id,
-              field: "volume",
-              code: "ENC.VOLUME_EMPTY",
-              text: "Volume must be a positive, non-zero value.",
+              ...statusFromCode("ENC.VOLUME_EMPTY", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+                field: "volume",
+              }),
             });
           }
         }
@@ -563,12 +577,11 @@ function validateProject(project: Project): StatusMessage[] {
           if (exceeds) {
             msgs.push({
               id: id(),
-              severity: "error",
-              systemId: sys.id,
-              zoneId: zone.id,
-              enclosureId: enc.id,
-              code: "ENC.FMDC_VOLUME_LIMIT",
-              text: "Volume for FM Data Centers may not exceed 31,350 ft³ / 2,912.5 m³.",
+              ...statusFromCode("ENC.FMDC_VOLUME_LIMIT", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+              }),
             });
           }
         }
@@ -585,12 +598,11 @@ function validateProject(project: Project): StatusMessage[] {
           if (exceeds) {
             msgs.push({
               id: id(),
-              severity: "error",
-              systemId: sys.id,
-              zoneId: zone.id,
-              enclosureId: enc.id,
-              code: "ENC.FM_VOLUME_LIMIT",
-              text: "Volume for FM Turbines/FM Machine Spaces may not exceed 127,525 ft³ / 3,611.1 m³.",
+              ...statusFromCode("ENC.FM_VOLUME_LIMIT", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+              }),
             });
           }
         }
@@ -609,11 +621,11 @@ function validateProject(project: Project): StatusMessage[] {
       if (key && seen[key] > 1) {
         msgs.push({
           id: id(),
-          severity: "error",
-          systemId: sys.id,
-          zoneId: z.id,
-          code: "ZONE.DUPLICATE_NAME",
-          text: `Zone names must be unique within a system (duplicate: "${z.name}").`,
+          ...statusFromCode(
+            "ZONE.DUPLICATE_NAME",
+            { systemId: sys.id, zoneId: z.id },
+            { name: z.name }
+          ),
         });
       }
     }
@@ -630,10 +642,11 @@ function validateProject(project: Project): StatusMessage[] {
     if (key && seen[key] > 1) {
       msgs.push({
         id: id(),
-        severity: "error",
-        systemId: s.id,
-        code: "SYS.DUPLICATE_NAME",
-        text: `System names must be unique across the project (duplicate: "${s.name}").`,
+        ...statusFromCode(
+          "SYS.DUPLICATE_NAME",
+          { systemId: s.id },
+          { name: s.name }
+        ),
       });
     }
   }
@@ -659,12 +672,11 @@ export function checkUniqueEnclosureNamesInZone(
     if (seen[key] > 1) {
       duplicates.push({
         id: newId("st"),
-        severity: "error",
-        systemId,
-        zoneId: zone.id,
-        enclosureId: enc.id,
-        code: "ENC.DUPLICATE_NAME",
-        text: `Enclosure names must be unique within a zone (duplicate: "${enc.name}").`,
+        ...statusFromCode(
+          "ENC.DUPLICATE_NAME",
+          { systemId, zoneId: zone.id, enclosureId: enc.id },
+          { name: enc.name }
+        ),
       });
     }
   }
@@ -691,14 +703,11 @@ export function checkZoneDesignMethodCompatibility(
   return [
     {
       id: newId("st"),
-      severity: "error",
-      systemId,
-      zoneId: zone.id,
-      code: "ZONE.DM_MISMATCH",
-      text:
-        "Enclosures sharing a nitrogen source must also have the same design discharge times. The following design methods are incompatible: " +
-        Array.from(methods).join(", ") +
-        ".",
+      ...statusFromCode(
+        "ZONE.DM_MISMATCH",
+        { systemId, zoneId: zone.id },
+        { methods: Array.from(methods) }
+      ),
     },
   ];
 }
@@ -1113,7 +1122,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   /* ---------- Pricing / BOM helpers ---------- */
   async function ensurePriceIndex(): Promise<PriceIndex> {
     if (priceIndex) return priceIndex;
-    const idx = await fetchPriceIndex(undefined, PRICE_EXCEPTIONS);
+    const idx = await fetchPriceIndex();
     setPriceIndex(idx);
     setPriceIndexReady(true);
     return idx;

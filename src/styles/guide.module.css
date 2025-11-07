@@ -629,5 +629,7 @@
   background: #fbfcff;
 }
 
-/* If you still use .btnGhost elsewhere on dark sections, keep it. 
-   Use .btnOutline for light sections instead. */
+/* Any table row with an id (your Error Code rows) respects the offset */
+.tableLight tr[id] {
+  scroll-margin-top: var(200px);
+}

@@ -2,6 +2,7 @@ import React from "react";
 import { useAppModel } from "@/state/app-model";
 import card from "@/styles/configurator.module.css";
 import styles from "@/styles/statusconsole.module.css";
+import { codeHref } from "@/core/status/error-codes";
 
 export default function StatusConsole() {
   const { project, status, hasErrors } = useAppModel();
@@ -49,12 +50,22 @@ export default function StatusConsole() {
               m.severity === "error"
                 ? styles.itemError
                 : m.severity === "warn"
-                ? styles.itemWarn
-                : styles.itemInfo;
+                  ? styles.itemWarn
+                  : styles.itemInfo;
             return (
               <div key={m.id} className={`${styles.item} ${severityClass}`}>
                 <div className={styles.itemText}>
-                  <strong>{m.code ? `[${m.code}] ` : null}</strong>
+                  {m.code ? (
+                    // <a
+                    //   href={codeHref(m.code)}
+                    //   target="_blank"
+                    //   rel="noopener noreferrer"
+                    //   className={styles.itemCodeLink}
+                    // >
+                    //   <strong>[{m.code}]</strong>
+                    // </a>
+                    <strong>[{m.code}]</strong>
+                  ) : null}
                   <br></br>
                   {m.text}
                 </div>

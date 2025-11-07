@@ -33,6 +33,27 @@ function pickStyleOrUndef(
   return (s || undefined) as EmitterStyleKey | undefined;
 }
 
+/** Convert model value -> input value. Blank if undefined/null. */
+export function toInputValue(v: number | null | undefined): string | number {
+  return v ?? "";
+}
+
+/** Convert input value -> model value.
+ * Returns undefined when the field is blank or mid-typing ("-", ".", "-.").
+ */
+export function fromNumberInput(raw: string): number | undefined {
+  if (raw === "" || raw === "-" || raw === "." || raw === "-.")
+    return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export function fromEditableNumber(raw: string): number | "" {
+  if (raw === "" || raw === "-" || raw === "." || raw === "-.") return "";
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : "";
+}
+
 /* ───────────────────────────────
    PAGE
    ─────────────────────────────── */
@@ -51,9 +72,27 @@ export default function ConfiguratorPage() {
 }
 
 function Scaffold() {
-  const { project, addSystem, clearProject } = useAppModel();
+  const { project, addSystem, clearProject, runCalculateAll } = useAppModel();
   const [showPreModal, setShowPreModal] = React.useState(false);
 
+  // 🔹 Listen for Enter globally
+  React.useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // optional: ignore if focused in a textarea, select, or button
+      const target = e.target as HTMLElement;
+      const tag = target?.tagName?.toLowerCase();
+      const isTextInput =
+        tag === "input" || tag === "select" || tag === "textarea";
+
+      if (e.key === "Enter" && isTextInput) {
+        // prevent default form submission behavior
+        e.preventDefault();
+        runCalculateAll();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [runCalculateAll]);
   const onAddEngineered = () => addSystem("engineered");
 
   const onAddPreClick = () => {
@@ -113,11 +152,9 @@ function Scaffold() {
         </div>
 
         {/* RIGHT */}
-        <div className={`${styles.rightCol} ${styles.sticky}`}>
+        <div className={`${styles.rightCol}`}>
           <StatusConsole />
           <FunctionButtons />
-          {/* New: Project Navigator goes UNDER the function buttons */}
-          {/* <ProjectNavigator /> */}
         </div>
       </div>
     </div>
@@ -188,7 +225,7 @@ function PricePanel() {
           min={0}
           max={1}
           step={0.01}
-          value={multiplier}
+          value={toInputValue(multiplier)}
           onChange={(e) => onMultiplierChange(e.target.value)}
           className={styles.inputXs}
           style={{ textAlign: "right" }}
@@ -563,13 +600,12 @@ function EngineeredEnclosureTable({
                 <td>
                   <input
                     type="number"
-                    min={0}
                     step={1}
                     className={styles.inputSm}
-                    value={enc.volume ?? 0}
+                    value={toInputValue(enc.volume)}
                     onChange={(e) =>
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        volume: onNum(e.target.value),
+                        volume: fromNumberInput(e.target.value),
                       })
                     }
                   />
@@ -580,10 +616,10 @@ function EngineeredEnclosureTable({
                     type="number"
                     step={1}
                     className={styles.inputXs}
-                    value={enc.tempF ?? 70}
+                    value={toInputValue(enc.tempF)}
                     onChange={(e) =>
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        tempF: onNum(e.target.value),
+                        tempF: fromNumberInput(e.target.value),
                       })
                     }
                   />
@@ -736,13 +772,14 @@ function EnclosureResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                 <input
                   className={styles.controlXS}
                   type="number"
-                  min={0}
-                  value={Number(displayEmitters) || 0}
-                  onChange={(e) =>
+                  value={toInputValue(displayEmitters)}
+                  onChange={(e) => {
+                    const val = fromEditableNumber(e.target.value);
                     updateEnclosure(sysId, zone.id, enc.id, {
-                      customMinEmitters: Number(e.target.value) || 0,
-                    })
-                  }
+                      customMinEmitters:
+                        val === "" ? enc.customMinEmitters : val,
+                    });
+                  }}
                   disabled={!isEditing}
                   style={{ width: 72, textAlign: "right" }}
                 />
@@ -790,11 +827,11 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
           </td>
         </tr>
         <tr>
-          <td className={styles.kvLabel}>Total Nitrogen Requirement</td>
+          <td className={styles.kvLabel}>Total N₂ Requirement</td>
           <td className={styles.kvValue}>{zone.totalNitrogen ?? "—"}</td>
         </tr>
         <tr>
-          <td className={styles.kvLabel}>Minimum Total Cylinders</td>
+          <td className={styles.kvLabel}>Number of Cylinders</td>
           <td
             className={styles.kvValue}
             style={{ display: "flex", gap: 8, alignItems: "center" }}
@@ -815,16 +852,26 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
             <input
               className={styles.controlXS}
               type="number"
-              min={0}
-              value={Number(displayCyl) || 0}
-              onChange={(e) =>
+              value={toInputValue(displayCyl)}
+              onChange={(e) => {
+                const val = fromEditableNumber(e.target.value);
                 updateZone(sysId, zone.id, {
-                  customMinTotalCylinders: Number(e.target.value) || 0,
-                })
-              }
+                  customMinTotalCylinders:
+                    val === "" ? zone.customMinTotalCylinders : val,
+                });
+              }}
               disabled={!editCyl}
               style={{ width: 84, textAlign: "right" }}
             />
+          </td>
+        </tr>
+        <tr>
+          <td className={styles.kvLabel}>Number of Panels</td>
+          <td className={styles.kvValue}>
+            {(() => {
+              const q = (zone?.panelSizing?.qty ?? 0) as number;
+              return Number.isFinite(q) ? q.toLocaleString() : "—";
+            })()}
           </td>
         </tr>
       </tbody>
@@ -878,9 +925,65 @@ function PreZoneBlock({ sys }: { sys: any }) {
           <PreEnclosureGuidance zone={sys.zones[0]} />
         </div>
         <div className={`${styles.section} ${styles["section--ok"]}`}>
-          <div className={styles.resultsHeader}>System Results</div>
-          <PreSystemResults zone={sys.zones[0]} />
+          <div className={styles.resultsHeader}>Emitter Layout Preview</div>
+          <EmitterImagePanel zone={sys.zones[0]} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EmitterImagePanel({ zone }: { zone: any }) {
+  // Pre-eng is single-enclosure; use the first
+  const enc = zone?.enclosures?.[0] ?? null;
+
+  // Prefer the computed minimum emitters; fall back to any existing count
+  const emitters: number = (enc?.minEmitters ?? enc?.emitterCount ?? 0) | 0;
+
+  // Guard: if nothing calculated yet, show a helpful note
+  if (!emitters || emitters < 0) {
+    return (
+      <div className={styles.muted}>
+        Run Calculate to determine emitters and preview the corresponding image.
+      </div>
+    );
+  }
+
+  // Images live in /public; filenames are "1.png", "2.png", ...
+  const src = `/${emitters}.png`;
+  const alt = `${emitters} emitter${emitters === 1 ? "" : "s"} layout preview`;
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div className={styles.mutedSm}>
+        Displaying preview for <strong>{emitters}</strong> emitter
+        {emitters === 1 ? "" : "s"}.
+      </div>
+      <div
+        style={{
+          border: "1px solid #e3e6ef",
+          borderRadius: 8,
+          overflow: "hidden",
+          background: "#fff",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block",
+            objectFit: "contain",
+            maxHeight: 360,
+            background: "#fff",
+          }}
+          onError={(e) => {
+            // Friendly fallback if an image for this count doesn't exist
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
       </div>
     </div>
   );
@@ -962,33 +1065,40 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                   <small>L</small>
                   <input
                     type="number"
-                    min={0}
                     step={1}
                     className={styles.dimInput}
-                    value={enc.length ?? 0}
-                    onChange={(e) => setDims({ length: onNum(e.target.value) })}
+                    value={toInputValue(enc.length)}
+                    onChange={(e) =>
+                      setDims({
+                        length: fromNumberInput(e.target.value) as any,
+                      })
+                    }
                   />
                 </label>
                 <label className={styles.dimRow}>
                   <small>W</small>
                   <input
                     type="number"
-                    min={0}
                     step={1}
                     className={styles.dimInput}
-                    value={enc.width ?? 0}
-                    onChange={(e) => setDims({ width: onNum(e.target.value) })}
+                    value={toInputValue(enc.width)}
+                    onChange={(e) =>
+                      setDims({ width: fromNumberInput(e.target.value) as any })
+                    }
                   />
                 </label>
                 <label className={styles.dimRow}>
                   <small>H</small>
                   <input
                     type="number"
-                    min={0}
                     step={1}
                     className={styles.dimInput}
-                    value={enc.height ?? 0}
-                    onChange={(e) => setDims({ height: onNum(e.target.value) })}
+                    value={toInputValue(enc.height)}
+                    onChange={(e) =>
+                      setDims({
+                        height: fromNumberInput(e.target.value) as any,
+                      })
+                    }
                   />
                 </label>
               </div>

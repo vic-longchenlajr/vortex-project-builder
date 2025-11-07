@@ -68,6 +68,33 @@ function intersect<T>(a: T[], b: T[]) {
   return a.filter((x) => set.has(x));
 }
 
+// Parse a numeric size from the label prefix (e.g., `5/8"`, `1/2"`, `1"` → number)
+function sizeValueFromLabel(label: string): number {
+  // Fast checks by common substrings
+  if (label.includes('1"')) return 1.0;
+  if (label.includes('5/8"')) return 0.625;
+  if (label.includes('1/2"')) return 0.5;
+  if (label.includes('3/8"')) return 0.375;
+  if (label.includes('1/4"')) return 0.25;
+  if (label.includes('1/8"')) return 0.125;
+
+  // Fallback: try to read something like 0.625" at start of label
+  const m = label.match(/^([\d./]+)"/);
+  if (m) {
+    const frac = m[1];
+    if (frac.includes("/")) {
+      const [a, b] = frac.split("/").map(Number);
+      if (Number.isFinite(a) && Number.isFinite(b) && b !== 0) {
+        return a / b;
+      }
+    } else {
+      const n = Number(frac);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 0; // unknown → smallest
+}
+
 // (Bring your existing emitterConfigMap here. The imports below are whatever you already use.)
 export const emitterConfigMap: any = {
   "NFPA 770 Class A/C": {
@@ -317,21 +344,33 @@ export type MethodName =
 
 export type NozzleCode = string; // e.g. "5825"
 
-// Replace the signatures to accept the optional opts
 export function getNozzlesForMethod(method: MethodName, opts?: CatalogOpts) {
   const cfg = emitterConfigMap[method];
   if (!cfg) return [];
 
+  // Build raw list with access to op_psi and label
   let list = Object.entries(cfg).map(([code, spec]: any) => ({
     code,
     label: spec.e_label as string,
+    psi: Number(spec.op_psi) || 0,
+    sizeVal: sizeValueFromLabel(String(spec.e_label || "")),
   }));
 
+  // Pre-engineered: apply whitelist
   if (opts?.systemType === "preengineered") {
     const allowed = new Set(PREENG_NOZZLE_WHITELIST[method] ?? []);
     list = list.filter((n) => allowed.has(n.code));
   }
-  return list;
+
+  // Sort by decreasing nozzle size, then by decreasing operating pressure
+  list.sort((a, b) => {
+    if (b.psi !== a.psi) return b.psi - a.psi; // 50 > 40 > 25
+    if (b.sizeVal !== a.sizeVal) return b.sizeVal - a.sizeVal; // 1" > 5/8" > 3/8" ...
+    return a.label.localeCompare(b.label); // stable tiebreaker
+  });
+
+  // Return the shape used by the UI
+  return list.map(({ code, label }) => ({ code, label }));
 }
 
 export function getStylesFor(

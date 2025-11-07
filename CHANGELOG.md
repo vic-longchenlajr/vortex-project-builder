@@ -1,5 +1,23 @@
 **Version Control Log:**
 
+_v2.1.0_
+
+Universal Updates
+
+- Sorted nozzle display by descreasing orifice size and operating pressure
+- Refined status panel and centralized wording.
+
+Engineered System Updates
+
+- Added "System Results" table which identifies zone driving nitrogen storage, total cylinders, total n2 requirement, zone driving water storage, minimum water tank requirement, and provided water tank.
+- Added number of panels to zone results.
+- Added separate panel sizing and calculations to account for multiple nozzle operating pressures.
+
+Pre-Engineered System Updates
+
+- Added provided water tank to system results and moved it into system options.
+- Added emitter layout
+
 _v2.0.0_
 
 Universal Updates

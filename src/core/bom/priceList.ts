@@ -13,10 +13,7 @@ function coerceNumber(x: unknown): number {
   return 0;
 }
 
-export async function fetchPriceIndex(
-  url = DEFAULT_URL,
-  exceptions?: any[]
-): Promise<PriceIndex> {
+export async function fetchPriceIndex(url = DEFAULT_URL): Promise<PriceIndex> {
   const bytes = await loadPriceListBytes(url);
 
   const wb = new ExcelJS.Workbook();
@@ -47,19 +44,6 @@ export async function fetchPriceIndex(
     };
     if (r.bpcs) idx[r.bpcs] = entry;
     if (r.m3) idx[r.m3] = entry;
-  }
-
-  if (Array.isArray(exceptions)) {
-    for (const ex of exceptions) {
-      const description = ex?.[1]?.[0] ?? "";
-      const bpcs = ex?.[2]?.[0] ?? "";
-      const m3 = ex?.[3]?.[0] ?? "";
-      const price = Number(ex?.[4]?.[0] ?? 0);
-      if (!description || (!bpcs && !m3)) continue;
-      const entry = { description, bpcs, m3, listPrice: price };
-      if (bpcs) idx[bpcs] = entry;
-      if (m3) idx[m3] = entry;
-    }
   }
 
   return idx;

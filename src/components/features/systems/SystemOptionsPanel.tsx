@@ -9,6 +9,7 @@ import {
 } from "@/state/app-model";
 import styles from "@/styles/systemoptionspanel.module.css";
 import type { WaterTankCert } from "@/core/catalog/water_tanks.catalog";
+import cfg from "@/styles/configurator.module.css";
 
 type Props = { systemId: string };
 
@@ -54,8 +55,8 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
             : undefined;
 
     updateSystemOptions(systemId, {
-      waterTankCertification: (mapped ?? defaultCert) as any,
-    } as any);
+      waterTankCertification: mapped ?? defaultCert,
+    });
   }, [waterTankCert, legacyTank, defaultCert, systemId, updateSystemOptions]);
 
   return (
@@ -96,12 +97,51 @@ function EngineeredForm({
   projectCurrency?: string;
   systemUnits: "imperial" | "metric";
 }) {
+  const { project } = useAppModel();
+  const system = project.systems.find((s) => s.id === systemId);
+  const t = system?.systemTotals;
+  const zoneNameById = (id?: string | null) =>
+    system?.zones.find((z) => z.id === id)?.name || "—";
+
+  const n = (x?: number | null) =>
+    typeof x === "number" && Number.isFinite(x) ? x.toLocaleString() : "—";
+
   const { updateSystemOptions } = useAppModel();
   const certValue =
     ((opts as any).waterTankCertification as WaterTankCert | undefined) ??
     defaultCertForCurrency(projectCurrency);
   const unitVol = systemUnits === "metric" ? "(L)" : "(gal)";
+  // --- helpers at top of EngineeredForm (just inside the component) ---
+  const editMap = ((opts as any)._editEstimates ?? {}) as Record<
+    string,
+    boolean
+  >;
+  const setEdit = (k: keyof EngineeredOptions["estimates"], on: boolean) => {
+    const next = { ...editMap, [k]: on };
+    // when toggling OFF, drop the user override so calc uses computed
+    const nextEst = on
+      ? opts.estimates
+      : { ...opts.estimates, [k]: undefined as any };
+    updateSystemOptions(systemId, {
+      _editEstimates: next as any,
+      estimates: nextEst,
+    } as any);
+  };
 
+  const setEst = (k: keyof EngineeredOptions["estimates"], v: number) =>
+    updateSystemOptions(systemId, { estimates: { ...opts.estimates, [k]: v } });
+  const waterTankDesc =
+    ((opts as any).waterTankPick?.description as string | undefined) ?? "—";
+
+  const galToL = (g?: number | null) =>
+    typeof g === "number" && Number.isFinite(g) ? g * 3.78541 : null;
+
+  const n0 = (x?: number | null) =>
+    typeof x === "number" && Number.isFinite(x)
+      ? Math.round(x).toLocaleString()
+      : "—";
+
+  // small row component
   return (
     <div className={styles.cols3}>
       {/* ───── Column 1: wider labels ───── */}
@@ -144,7 +184,7 @@ function EngineeredForm({
           onChange={(e) =>
             updateSystemOptions(systemId, {
               waterTankCertification: e.target.value as WaterTankCert,
-            } as any)
+            })
           }
         >
           {WATER_CERT_OPTIONS.map((o) => (
@@ -209,7 +249,6 @@ function EngineeredForm({
       {/* ───── Column 2: vertical Add-ons list ───── */}
       <div>
         <div className={styles.subhead}>Add-ons</div>
-
         <div className={styles.addons}>
           {/* Placards row with Door Count to the right */}
           <div className={styles.checkRow}>
@@ -251,7 +290,7 @@ function EngineeredForm({
             </span>
           </div>
 
-          <label className={styles.blockCheck}>
+          {/* <label className={styles.blockCheck}>
             <input
               type="checkbox"
               checked={opts.addOns.bulkRefillAdapter}
@@ -265,9 +304,9 @@ function EngineeredForm({
               }
             />
             Bulk cylinder refill adapter
-          </label>
+          </label> */}
 
-          <label className={styles.blockCheck}>
+          {/* <label className={styles.blockCheck}>
             <input
               type="checkbox"
               checked={opts.addOns.waterFlexLine}
@@ -278,7 +317,7 @@ function EngineeredForm({
               }
             />
             Water flex line for emitters
-          </label>
+          </label> */}
 
           <label className={styles.blockCheck}>
             <input
@@ -327,145 +366,202 @@ function EngineeredForm({
               Bulk Tube Order Form
             </a>
           </label>
-        </div>
+          {/* Estimated Values (Engineered) */}
+          <table
+            className={`${cfg.resultsTable} ${styles.estTable}`}
+            style={{ marginTop: 8 }}
+          >
+            <thead>
+              <tr>
+                <th colSpan={3}>
+                  <strong>Estimated Values</strong>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Editable rows */}
+              <tr>
+                <td className={cfg.kvLabel}>Primary Release Assemblies</td>
+                <td
+                  className={cfg.kvValue}
+                  style={{ display: "flex", gap: 8, alignItems: "center" }}
+                >
+                  <span className={styles.estControls}>
+                    <input
+                      type="checkbox"
+                      checked={!!editMap.primaryReleaseAssemblies}
+                      onChange={(e) =>
+                        setEdit("primaryReleaseAssemblies", e.target.checked)
+                      }
+                      title="Enable custom value"
+                    />
+                    <input
+                      className={`${styles.controlXS} ${styles.estInput}`}
+                      type="number"
+                      min={0}
+                      value={
+                        Number(
+                          (opts.estimates as any).primaryReleaseAssemblies
+                        ) || 0
+                      }
+                      onChange={(e) =>
+                        setEst(
+                          "primaryReleaseAssemblies",
+                          Number(e.target.value) || 0
+                        )
+                      }
+                      disabled={!editMap.primaryReleaseAssemblies}
+                    />
+                  </span>
+                </td>
+              </tr>
+
+              <tr>
+                <td className={cfg.kvLabel}>Double Stacked Rack Hoses</td>
+                <td
+                  className={cfg.kvValue}
+                  style={{ display: "flex", gap: 8, alignItems: "center" }}
+                >
+                  <span className={styles.estControls}>
+                    <input
+                      type="checkbox"
+                      checked={!!editMap.doubleStackedRackHose}
+                      onChange={(e) =>
+                        setEdit("doubleStackedRackHose", e.target.checked)
+                      }
+                      title="Enable custom value"
+                    />
+                    <input
+                      className={`${styles.controlXS} ${styles.estInput}`}
+                      type="number"
+                      min={0}
+                      value={
+                        Number((opts.estimates as any).doubleStackedRackHose) ||
+                        0
+                      }
+                      onChange={(e) =>
+                        setEst(
+                          "doubleStackedRackHose",
+                          Number(e.target.value) || 0
+                        )
+                      }
+                      disabled={!editMap.doubleStackedRackHose}
+                    />
+                  </span>
+                </td>
+              </tr>
+
+              <tr>
+                <td className={cfg.kvLabel}>Adjacent Rack Hoses</td>
+                <td
+                  className={cfg.kvValue}
+                  style={{ display: "flex", gap: 8, alignItems: "center" }}
+                >
+                  <span className={styles.estControls}>
+                    <input
+                      type="checkbox"
+                      checked={!!editMap.adjacentRackHose}
+                      onChange={(e) =>
+                        setEdit("adjacentRackHose", e.target.checked)
+                      }
+                      title="Enable custom value"
+                    />
+                    <input
+                      className={`${styles.controlXS} ${styles.estInput}`}
+                      type="number"
+                      min={0}
+                      value={
+                        Number((opts.estimates as any).adjacentRackHose) || 0
+                      }
+                      onChange={(e) =>
+                        setEst("adjacentRackHose", Number(e.target.value) || 0)
+                      }
+                      disabled={!editMap.adjacentRackHose}
+                    />
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Release Points</td>
+                <td className={cfg.kvValue}>{n(t?.estReleasePoints)}</td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Monitor Points</td>
+                <td className={cfg.kvValue}>{n(t?.estMonitorPoints)}</td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Battery Backups</td>
+                <td className={cfg.kvValue}>{n(t?.estBatteryBackups)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>{" "}
       </div>
-
-      {/* ───── Column 3: edit + six estimate inputs ───── */}
+      {/* ───── Column 3: System Totals table ───── */}
       <div className={styles.estimateCol}>
-        <div className={styles.estimateGroup}>
-          <div className={styles.editToggle}>
-            <input
-              type="checkbox"
-              checked={opts.editValues}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  editValues: e.target.checked,
-                })
-              }
-            />
-            <strong>Edit Values</strong>
-          </div>
+        {/* <div className={cfg.resultsHeader}>
+          <strong>System Totals</strong>
+        </div> */}
+        {!t ? (
+          <div className={styles.muted}>Run Calculate to see totals.</div>
+        ) : (
+          <table className={cfg.resultsTable}>
+            <thead>
+              <th colSpan={3}>
+                <strong>System Results</strong>
+              </th>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={3} className={cfg.kvLabel}>
+                  <div>
+                    <strong>
+                      Zone Driving N₂ Storage:{" "}
+                      {zoneNameById(t.governingNitrogenZoneId)}
+                    </strong>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Total Cylinders</td>
+                <td className={cfg.kvValue}>{n(t.totalCylinders)}</td>
+              </tr>
+              <tr>
+                <td>Total N₂ Requirement</td>
+                <td className={cfg.kvValue}>{n(t.totalNitrogen_scf)} SCF</td>
+              </tr>
+              <tr>
+                <td colSpan={3} className={cfg.kvLabel}>
+                  <div>
+                    <strong>
+                      Zone Driving Water Storage:{" "}
+                      {zoneNameById(t.governingWaterZoneId)}
+                    </strong>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Min. Water Tank Requirement</td>
+                <td className={cfg.kvValue}>
+                  {typeof t?.waterTankRequired_gal === "number"
+                    ? `${n0(t.waterTankRequired_gal)} gal / ${n0(galToL(t.waterTankRequired_gal))} L`
+                    : "—"}
+                </td>
+              </tr>
 
-          <div className={styles.estimateRow}>
-            <label>Est. Primary Release Assemblies</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.primaryReleaseAssemblies}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    primaryReleaseAssemblies: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Double Stacked Rack Hose</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.doubleStackedRackHose}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    doubleStackedRackHose: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Adjacent Rack Hose</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.adjacentRackHose}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    adjacentRackHose: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Release Points (FACP)</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.releasePoints}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    releasePoints: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Monitor Points (FACP)</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.monitorPoints}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    monitorPoints: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Battery Backups</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.batteryBackups}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    batteryBackups: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-        </div>
+              {/* REPLACE Water Discharge Requirement with Water Tank Selection */}
+              <tr>
+                <td className={cfg.kvLabel}>Provided Water Tank</td>
+                <td className={cfg.kvValue}>{waterTankDesc}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
 }
 
-/* ------------ PRE-ENGINEERED (3 columns) ------------ */
 function PreForm({
   systemId,
   opts,
@@ -475,13 +571,36 @@ function PreForm({
   opts: PreEngineeredOptions;
   projectCurrency?: string;
 }) {
-  const { updateSystemOptions } = useAppModel();
+  const { project, updateSystemOptions } = useAppModel();
+  const system = project.systems.find((s) => s.id === systemId);
+  const t = system?.systemTotals;
+
+  // NEW: pull the primary pre-eng enclosure for summary rows (same source as old PreSystemResults)
+  const enc = system?.zones?.[0]?.enclosures?.[0] ?? {};
+  const unitVol = project.units === "metric" ? "m³" : "ft³";
+  const L = Number((enc as any).length) || 0;
+  const W = Number((enc as any).width) || 0;
+  const H = Number((enc as any).height) || 0;
+  const totalVolume = +(L * W * H).toFixed(project.units === "metric" ? 3 : 0);
+  const minEmitters =
+    (enc as any).minEmitters ?? (enc as any).emitterCount ?? "—";
+  const cylinders = (enc as any).cylinderCount ?? "—";
+  const estDischarge =
+    (enc as any).estDischarge ?? (enc as any).estimatedDischarge ?? "—";
+  const estO2 = (enc as any).estFinalO2 ?? (enc as any).o2Final ?? "—";
+
+  const waterTankDesc =
+    (system.options as any).waterTankPick?.description || "—";
+
+  const zoneNameById = (id?: string | null) =>
+    system?.zones.find((z) => z.id === id)?.name || "—";
+  const n = (x?: number | null) =>
+    typeof x === "number" && Number.isFinite(x) ? x.toLocaleString() : "—";
   const setAddOn = (patch: Partial<PreEngineeredOptions["addOns"]>) =>
     updateSystemOptions(systemId, { addOns: { ...opts.addOns, ...patch } });
   const certValue =
     ((opts as any).waterTankCertification as WaterTankCert | undefined) ??
     defaultCertForCurrency(projectCurrency);
-
   return (
     <div className={styles.cols3}>
       {/* LEFT column */}
@@ -554,7 +673,7 @@ function PreForm({
         <div className={styles.subhead}>Add-ons</div>
 
         <div className={styles.addons}>
-          <label className={styles.blockCheck}>
+          {/* <label className={styles.blockCheck}>
             <input
               type="checkbox"
               checked={opts.addOns.bulkRefillAdapter}
@@ -563,7 +682,7 @@ function PreForm({
               }
             />
             Bulk cylinder refill adapter
-          </label>
+          </label> */}
 
           <label className={styles.blockCheck}>
             <input
@@ -576,60 +695,84 @@ function PreForm({
             Explosion-proof pressure transducer
           </label>
         </div>
+        {/* Estimated Values (Pre-Engineered) */}
+        <table
+          className={`${cfg.resultsTable} ${styles.estTable}`}
+          style={{ marginTop: 8 }}
+        >
+          <thead>
+            <tr>
+              <th colSpan={2}>
+                <strong>Estimated Values</strong>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className={cfg.kvLabel}>Release Points</td>
+              <td className={cfg.kvValue}>
+                {typeof t?.estReleasePoints === "number"
+                  ? t.estReleasePoints.toLocaleString()
+                  : "—"}
+              </td>
+            </tr>
+            <tr>
+              <td className={cfg.kvLabel}>Monitor Points</td>
+              <td className={cfg.kvValue}>
+                {typeof t?.estMonitorPoints === "number"
+                  ? t.estMonitorPoints.toLocaleString()
+                  : "—"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      {/* RIGHT column — Edit values + two estimates */}
+      {/* RIGHT column — System Totals table (now also includes enclosure summary) */}
       <div className={styles.estimateCol}>
-        <div className={styles.estimateGroup}>
-          <div className={styles.editToggle}>
-            <input
-              type="checkbox"
-              checked={opts.editValues}
-              onChange={(e) =>
-                updateSystemOptions(systemId, { editValues: e.target.checked })
-              }
-            />
-            <strong>Edit values</strong>
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Release Points (FACP)</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.releasePoints}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    releasePoints: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-
-          <div className={styles.estimateRow}>
-            <label>Est. Monitor Points (FACP)</label>
-            <input
-              className={styles.controlXS}
-              type="number"
-              min={0}
-              value={opts.estimates.monitorPoints}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimates: {
-                    ...opts.estimates,
-                    monitorPoints: Number(e.target.value) || 0,
-                  },
-                })
-              }
-              disabled={!opts.editValues}
-            />
-          </div>
-        </div>
+        {!t ? (
+          <div className={styles.muted}>Run Calculate to see totals.</div>
+        ) : (
+          <table className={cfg.resultsTable}>
+            <thead>
+              <tr>
+                <th colSpan={3}>
+                  <strong>System Results</strong>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* ——— Enclosure-derived rows ——— */}
+              <tr>
+                <td className={cfg.kvLabel}>Number of Nozzles</td>
+                <td className={cfg.kvValue}>{minEmitters}</td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Number of Cylinders</td>
+                <td className={cfg.kvValue}>{cylinders}</td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Cylinder Size @ Fill Pressure</td>
+                <td className={cfg.kvValue}>
+                  {(enc as any)._cylinderLabel ?? "—"}
+                </td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Estimated Discharge Time</td>
+                <td className={cfg.kvValue}>{estDischarge}</td>
+              </tr>
+              <tr>
+                <td className={cfg.kvLabel}>Estimated Final O₂</td>
+                <td className={cfg.kvValue}>{estO2}</td>
+              </tr>
+              {/* ——— System-level rows ——— */}
+              <tr>
+                <td className={cfg.kvLabel}>Provided Water Tank</td>
+                <td className={cfg.kvValue}>{waterTankDesc}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

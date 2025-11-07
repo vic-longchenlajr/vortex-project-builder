@@ -3,6 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Navbar from "@/components/ui/NavBar";
 import styles from "@/styles/guide.module.css"; // reuse global page styles
+import { ERROR_CODES, codeAnchorId } from "@/core/status/error-codes";
 
 export default function Guide() {
   return (
@@ -515,7 +516,7 @@ export default function Guide() {
         </section>
 
         {/* ───────── ERROR CODES (Dedicated) ───────── */}
-        <section id="errors" className={`${styles.section} ${styles.light}`}>
+        {/* <section id="errors" className={`${styles.section} ${styles.light}`}>
           <h2 className={styles.sectionHeading}>Error Codes</h2>
           <p>
             Use this reference when Status shows <strong>errors</strong>{" "}
@@ -532,7 +533,6 @@ export default function Guide() {
                 </tr>
               </thead>
               <tbody>
-                {/* ───── Project / System / Zone Validation (Errors) ───── */}
                 <tr>
                   <td colSpan={4}>
                     <strong>Errors — Must Be Resolved</strong>
@@ -719,7 +719,6 @@ export default function Guide() {
                   </td>
                 </tr>
 
-                {/* ───── Engineered Runtime Errors ───── */}
                 <tr>
                   <td>
                     <code>ENC.FMDC_MIN_DISCHARGE</code>
@@ -734,7 +733,6 @@ export default function Guide() {
                   </td>
                 </tr>
 
-                {/* ───── Pre-Engineered Runtime Errors ───── */}
                 <tr>
                   <td>
                     <code>ENC.CYL_LIMIT</code>
@@ -829,7 +827,6 @@ export default function Guide() {
                   </td>
                 </tr>
 
-                {/* ───── Warnings — Advisory Only ───── */}
                 <tr>
                   <td colSpan={4}>
                     <strong>Warnings — Advisory Only</strong>
@@ -969,7 +966,6 @@ export default function Guide() {
           </div>
         </section>
 
-        {/* ───────── PROJECT WORKBOOK BREAKDOWN ───────── */}
         <section id="workbook" className={`${styles.section} ${styles.dark}`}>
           <h2 className={styles.sectionHeading}>Project Workbook Breakdown</h2>
           <p>When you export, the excel workbook includes these sheets:</p>
@@ -1051,6 +1047,41 @@ export default function Guide() {
                   </td>
                 </tr>
               </tbody>{" "}
+            </table>
+          </div>
+        </section> */}
+
+        <section id="errors" className={`${styles.section} ${styles.light}`}>
+          <h2 className={styles.sectionHeading}>Error Codes</h2>
+          <p>
+            Use this reference when Status shows <strong>errors</strong>{" "}
+            (blocking) or <strong>warnings</strong> (advisory).
+          </p>
+
+          <div className={styles.tableWrap}>
+            <table className={styles.tableLight}>
+              <thead>
+                <tr>
+                  <th style={{ whiteSpace: "nowrap" }}>Code</th>
+                  <th>Appears When</th>
+                  <th>Meaning</th>
+                  <th>Resolution Steps</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(ERROR_CODES).map(([code, doc]) => (
+                  <tr key={code} id={codeAnchorId(code as any)}>
+                    <td>
+                      <code>{code}</code>
+                    </td>
+                    <td>{doc.appearsWhen}</td>
+                    <td>{doc.meaning}</td>
+                    <td>
+                      <em>{doc.resolution}</em>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         </section>
@@ -1156,6 +1187,19 @@ export default function Guide() {
                       calculations by following pre-engineered piping rules.
                     </li>
                   </ul>
+                </div>
+              </details>
+              <details className={styles.faqItem}>
+                <summary>
+                  How is the water tank/number of cylinders determined for a
+                  system?
+                </summary>
+                <div className={styles.faqBody}>
+                  The configurator iterates through all of the zone calculations
+                  to determine the zone with the highest required quantity of
+                  nitrogen and the zone with the highest required quantity of
+                  water. The system storage is then sized to meet the
+                  requirements of these zones.
                 </div>
               </details>
             </div>
@@ -1399,7 +1443,7 @@ export default function Guide() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.0.0</div>
+          <div className={styles.footer}>v2.1.0</div>
         </section>
       </div>
     </>

@@ -474,18 +474,32 @@ export function collectPreEngineeredBOM(
     } else {
       systemPartCode[14] = "0";
     }
-    //============================================WATER TANK============================================//
-    // Water tank (pre-eng example)
+    // ============================================WATER TANK============================================ //
     const reqGal = Math.ceil(Number((zone as any).waterTankMin_gal) || 0);
     if (reqGal > 0) {
-      const uiCert = resolveTankCertFromOptions(sys); // maps UI -> catalog cert
-      if (uiCert) {
-        const chosen = selectWaterTankStrict(uiCert, reqGal);
-        if (chosen?.codes) {
-          add(bom, chosen.codes, 1, "supply"); // ← no swapping needed anymore
-          systemPartCode[11] = chosen.pe_code ?? ""; // set PE code if present
-        } else {
-          systemPartCode[11] = "-"; // no fit
+      const optsAny = sys.options as any;
+
+      // 1) Prefer calc-layer decision (from pre-eng calcSystem we added earlier)
+      const pickFromCalc: {
+        codes: [string, string];
+        description: string;
+        cert: WaterTankCert;
+      } | null = optsAny.waterTankPick ?? null;
+
+      if (pickFromCalc && Array.isArray(pickFromCalc.codes)) {
+        add(bom, pickFromCalc.codes, 1, "supply");
+        systemPartCode[11] = (pickFromCalc as any).pe_code ?? ""; // if your catalog exposes it
+      } else {
+        // 2) Fallback: compute here using exact cert + req capacity
+        const uiCert = resolveTankCertFromOptions(sys);
+        if (uiCert) {
+          const chosen = selectWaterTankStrict(uiCert, reqGal);
+          if (chosen?.codes) {
+            add(bom, chosen.codes, 1, "supply");
+            systemPartCode[11] = chosen.pe_code ?? "";
+          } else {
+            systemPartCode[11] = "-"; // no fit (calc layer can issue warning)
+          }
         }
       }
     }

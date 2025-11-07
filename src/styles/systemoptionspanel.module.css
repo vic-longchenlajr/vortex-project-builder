@@ -150,3 +150,44 @@
   align-items: center;
   white-space: nowrap;
 }
+.muted {
+  color: #667085;
+}
+.mutedSm {
+  color: #667085;
+  font-size: 0.85em;
+}
+
+/* Estimated Values: compact look like Zone Results */
+.estTable td {
+  /* tighter row padding */
+  padding: 4px 8px;
+}
+.estTable thead th {
+  padding: 6px 8px; /* keep header comfortable */
+}
+
+.estControls {
+  /* checkbox + number inline, right-aligned */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.estInput {
+  /* shorter numeric input */
+  height: 24px; /* ~Zone Results control height */
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  width: 7ch; /* keep your XS width */
+  min-width: 64px;
+  text-align: right;
+}
+
+/* optional: smaller checkbox to visually match */
+.estControls input[type="checkbox"] {
+  transform: scale(0.95);
+}

@@ -194,7 +194,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.0.0</div>
+          <div className={styles.footer}>v2.1.0</div>
         </section>
       </div>
     </>
