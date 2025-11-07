@@ -5,7 +5,7 @@ _v2.1.0_
 Universal Updates
 
 - Sorted nozzle display by descreasing orifice size and operating pressure
-- Refined status panel and centralized wording.
+- Refined status panel wording and centralized location of all error/warning codes throughout the guide and configurator.
 
 Engineered System Updates
 
