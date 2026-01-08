@@ -268,11 +268,11 @@ export default function Guide() {
                 <li>
                   <strong>Enclosure Input</strong> — Enter the Enclosure Name,
                   Volume, Temperature, Design Method, Nozzle, and Style. These
-                  determine emitters, flow cartridges, and nitrogen demand.
+                  determine nozzles, flow cartridges, and nitrogen demand.
                 </li>
                 <li>
                   <strong>Calculate</strong> — Validate all inputs and compute
-                  emitter quantity, discharge time, oxygen level, and panel
+                  nozzle quantity, discharge time, oxygen level, and panel
                   sizing.
                 </li>
               </ol>
@@ -296,7 +296,7 @@ export default function Guide() {
                 </li>
                 <li>
                   <strong>Enclosure Results</strong> — Displays calculated
-                  minimum emitters, estimated discharge time, and final oxygen
+                  minimum nozzles, estimated discharge time, and final oxygen
                   level.
                 </li>
                 <li>
@@ -342,17 +342,16 @@ export default function Guide() {
                 </li>
                 <li>
                   <strong>Add-Ons</strong> — Select optional items such as the
-                  bulk refill adapter and explosion-proof pressure transducer.
-                  <em> Door Count</em> automatically sets signage quantities.
+                  explosion-proof pressure transducer.
                 </li>
                 <li>
                   <strong>Enclosure Input</strong> — Enter Enclosure Name,
                   Length, Width, Height, Temperature, Design Method, Nozzle, and
-                  Style. These determine emitter and flow-cartridge selection.
+                  Style. These determine nozzle and flow-cartridge selection.
                 </li>
                 <li>
                   <strong>Calculate</strong> — Performs all pre-engineered
-                  validations and computes emitters, cylinders, discharge time,
+                  validations and computes nozzles, cylinders, discharge time,
                   and oxygen level for this single-zone, single-enclosure
                   system.
                 </li>
@@ -377,15 +376,16 @@ export default function Guide() {
                 </li>
                 <li>
                   <strong>Enclosure Requirements</strong> — Displays maximum and
-                  minimum allowed openings (based on emitter size and volume)
+                  minimum allowed openings (based on nozzle size and volume)
                   plus spacing and height limits per pre-engineered approval
                   tables.
                 </li>
                 <li>
                   <strong>System Results</strong> — Lists total volume, minimum
-                  emitters and cylinders, cylinder size @ fill pressure,
-                  estimated discharge time, and final O₂. (USD uses filled 80 L
-                  cylinders; non-USD uses unfilled by default.)
+                  nozzles and cylinders, cylinder size @ fill pressure,
+                  estimated discharge time, and final O₂. (USD uses filled 49L
+                  and 80L cylinders for Pre-Engineered systems; non-USD uses
+                  unfilled by default.)
                 </li>
                 <li>
                   <strong>Custom Checkbox</strong> — Enable to override FACP
@@ -728,7 +728,7 @@ export default function Guide() {
                   <td>
                     <em>
                       Add cylinders or lower flow (smaller nozzle or fewer
-                      emitters) until discharge time ≥ 3.5 min.
+                      nozzles) until discharge time ≥ 3.5 min.
                     </em>
                   </td>
                 </tr>
@@ -771,11 +771,11 @@ export default function Guide() {
                   </td>
                   <td>On Calculate</td>
                   <td>
-                    No valid emitter/pressure combination meets discharge time.
+                    No valid nozzle/pressure combination meets discharge time.
                   </td>
                   <td>
                     <em>
-                      Try different nozzle size, emitter style, or fill
+                      Try different nozzle size, nozzle style, or fill
                       pressure; if limits persist, switch to engineered mode.
                     </em>
                   </td>
@@ -786,12 +786,12 @@ export default function Guide() {
                   </td>
                   <td>On Calculate</td>
                   <td>
-                    Selected emitter style not compatible with nozzle/method.
+                    Selected nozzle style not compatible with nozzle/method.
                   </td>
                   <td>
                     <em>
                       Select an allowed style for that nozzle and method (see
-                      emitter catalog).
+                      nozzle catalog).
                     </em>
                   </td>
                 </tr>
@@ -806,7 +806,7 @@ export default function Guide() {
                   </td>
                   <td>
                     <em>
-                      Lower ceiling height, pick smaller emitter, or redesign
+                      Lower ceiling height, pick smaller nozzle, or redesign
                       layout per FM table.
                     </em>
                   </td>
@@ -817,11 +817,11 @@ export default function Guide() {
                   </td>
                   <td>On Calculate</td>
                   <td>
-                    Room dimensions violate FM emitter spacing requirements.
+                    Room dimensions violate FM nozzle spacing requirements.
                   </td>
                   <td>
                     <em>
-                      Increase emitter count, change emitter size, or divide
+                      Increase nozzle count, change nozzle size, or divide
                       room to meet spacing table.
                     </em>
                   </td>
@@ -884,7 +884,7 @@ export default function Guide() {
                   </td>
                   <td>On Calculate</td>
                   <td>
-                    User override of emitter count differs from calculated
+                    User override of nozzle count differs from calculated
                     minimum.
                   </td>
                   <td>
@@ -903,7 +903,7 @@ export default function Guide() {
                   </td>
                   <td>
                     <em>
-                      Increase emitter count or use a smaller nozzle to raise
+                      Increase nozzle count or use a smaller nozzle to raise
                       flow and shorten time.
                     </em>
                   </td>
@@ -1028,7 +1028,7 @@ export default function Guide() {
                     Provides reference pipe routing and sizing guidance based on
                     the computed nitrogen flow rate. Includes recommended pipe
                     diameters, run lengths, and connection layouts for each
-                    emitter branch, aligned with current pre-engineered
+                    nozzle branch, aligned with current pre-engineered
                     standards.
                   </td>
                 </tr>
@@ -1274,7 +1274,7 @@ export default function Guide() {
               <details className={styles.faqItem}>
                 <summary>Can I manually override calculated values?</summary>
                 <div className={styles.faqBody}>
-                  By checking the box adjacent to the emitter and cylinder
+                  By checking the box adjacent to the nozzle and cylinder
                   quantities, the user can manually override the calculated
                   values and recalculate the system based on these inputs.
                   Additionally, the user can edit the calculated primaries,
@@ -1443,7 +1443,7 @@ export default function Guide() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.1.0</div>
+          <div className={styles.footer}>v2.1.1</div>
         </section>
       </div>
     </>

@@ -36,5 +36,5 @@ export type BomMap = Map<string, BomLine>; // key = `${scopeKey}::${partcode}`
 
 export type EngineeredBomBySystem = Record<
   string,
-  { systemName: string; bom: BomMap }
+  { systemName: string; bom: BomMap; systemPartCode?: string }
 >;

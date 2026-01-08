@@ -23,6 +23,8 @@ import {
   __14_emitter_dom_es,
   __1_emitter_dom_ss,
   type Codes,
+  __12_emitter_dom_br,
+  __58_emitter_cav_ss,
 } from "./parts.constants";
 
 // emitter.catalog.ts (add near the top, after types)
@@ -43,8 +45,8 @@ const PREENG_STYLE_WHITELIST: Record<
   Record<NozzleCode, EmitterStyleKey[]>
 > = {
   "NFPA 770 Class A/C": {
-    "5850": ["escutcheon-stainless", "standard-pvdf"], // 5/8" Cavity @ 50
-    "5825": ["escutcheon-stainless", "standard-pvdf"], // 5/8" Cavity @ 25
+    "5850": ["escutcheon-stainless", "standard-pvdf", "standard-stainless"], // 5/8" Cavity @ 50
+    "5825": ["escutcheon-stainless", "standard-pvdf", "standard-stainless"], // 5/8" Cavity @ 25
     "3850": ["escutcheon-stainless", "standard-stainless"], // 3/8" Cavity @ 50
     "3825": ["escutcheon-stainless", "standard-stainless"], // 3/8" Cavity @ 25
   },
@@ -129,6 +131,7 @@ export const emitterConfigMap: any = {
       e_style: {
         "escutcheon-stainless": __58_emitter_cav_es,
         "standard-pvdf": __58_emitter_cav_sp,
+        "standard-stainless": __58_emitter_cav_ss,
       },
       pe_code: "F",
     },
@@ -141,6 +144,7 @@ export const emitterConfigMap: any = {
       e_style: {
         "escutcheon-stainless": __58_emitter_cav_es,
         "standard-pvdf": __58_emitter_cav_sp,
+        "standard-stainless": __58_emitter_cav_ss,
       },
       pe_code: "E",
     },
@@ -201,6 +205,7 @@ export const emitterConfigMap: any = {
       e_style: {
         "escutcheon-stainless": __12_emitter_dom_es,
         "standard-pvdf": __12_emitter_dom_sp,
+        "standard-stainless": __12_emitter_dom_ss,
       },
       pe_code: "D",
     },
@@ -213,6 +218,7 @@ export const emitterConfigMap: any = {
       e_style: {
         "escutcheon-stainless": __12_emitter_dom_es,
         "standard-pvdf": __12_emitter_dom_sp,
+        "standard-stainless": __12_emitter_dom_ss,
       },
       pe_code: "C",
     },
@@ -315,8 +321,7 @@ export const emitterConfigMap: any = {
       f_cart: __flow_cartridge_106,
       e_label: '1/2" Dome Foil @ 25 PSI',
       e_style: {
-        "standard-stainless": __12_emitter_dom_ss,
-        "standard-pvdf": __12_emitter_dom_sp,
+        "standard-brass": __12_emitter_dom_br,
       },
     },
   },
@@ -328,8 +333,7 @@ export const emitterConfigMap: any = {
       f_cart: __flow_cartridge_106,
       e_label: '1/2" Dome Foil @ 25 PSI',
       e_style: {
-        "standard-stainless": __12_emitter_dom_ss,
-        "standard-pvdf": __12_emitter_dom_sp,
+        "standard-brass": __12_emitter_dom_br,
       },
     },
   },
@@ -435,7 +439,8 @@ export function pickDefaultStyle(
 export type EmitterStyleKey =
   | "standard-stainless"
   | "escutcheon-stainless"
-  | "standard-pvdf";
+  | "standard-pvdf"
+  | "standard-brass";
 
 export function resolveEmitterSpec(
   method: MethodName,
@@ -461,4 +466,55 @@ export function resolveEmitterSpec(
     label: conf.e_label,
     pe_code: conf.pe_code,
   };
+}
+
+// Reverse lookup: find nozzleCode by (method, pe_code, style)
+// Used for decoding pre-eng system partcodes.
+export function findNozzleByPeCode(
+  method: MethodName,
+  peCode: string,
+  style: EmitterStyleKey,
+  opts?: CatalogOpts
+): NozzleCode | undefined {
+  const cfg = emitterConfigMap?.[method];
+  if (!cfg) return undefined;
+
+  // Candidate nozzle codes that match pe_code and support the style
+  let candidates = Object.entries(cfg)
+    .filter(([nozzle, spec]: any) => {
+      if (!spec) return false;
+      if (String(spec.pe_code || "") !== String(peCode || "")) return false;
+      const styles = spec.e_style ? Object.keys(spec.e_style) : [];
+      return styles.includes(style);
+    })
+    .map(([nozzle]) => nozzle as NozzleCode);
+
+  // If pre-engineered, restrict to whitelist (and preserve its ordering)
+  if (opts?.systemType === "preengineered") {
+    const allowed = PREENG_NOZZLE_WHITELIST[method] ?? [];
+    const allowedSet = new Set(allowed);
+    candidates = candidates.filter((c) => allowedSet.has(c));
+
+    // Prefer the whitelist order if multiple candidates
+    for (const a of allowed) {
+      if (candidates.includes(a)) return a;
+    }
+  }
+
+  // Otherwise (or if whitelist didn't decide), apply a stable preference:
+  // prefer higher op_psi, then larger size, then lexical tie-breaker
+  const scored = candidates
+    .map((code) => {
+      const spec: any = cfg[code];
+      const psi = Number(spec?.op_psi) || 0;
+      const sizeVal = sizeValueFromLabel(String(spec?.e_label || ""));
+      return { code, psi, sizeVal, label: String(spec?.e_label || code) };
+    })
+    .sort((a, b) => {
+      if (b.psi !== a.psi) return b.psi - a.psi;
+      if (b.sizeVal !== a.sizeVal) return b.sizeVal - a.sizeVal;
+      return a.label.localeCompare(b.label);
+    });
+
+  return scored[0]?.code;
 }

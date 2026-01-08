@@ -19,7 +19,7 @@ export default function StatusConsole() {
   };
 
   return (
-    <section className={card.section}>
+    <section className={`${styles.section} ${styles.statusTallCard}`}>
       <h3 className={styles.heading}>Status</h3>
 
       <div className={styles.pillRow}>
@@ -33,57 +33,60 @@ export default function StatusConsole() {
           {infoCount} Info
         </span>
       </div>
-
-      <div
-        role="log"
-        aria-live="polite"
-        aria-relevant="additions text"
-        className={styles.log}
-      >
-        {status.length === 0 ? (
-          <div className={styles.empty}>
-            No messages yet. Click <strong>Calculate</strong> to run checks.
-          </div>
-        ) : (
-          status.map((m) => {
-            const severityClass =
-              m.severity === "error"
-                ? styles.itemError
-                : m.severity === "warn"
-                  ? styles.itemWarn
-                  : styles.itemInfo;
-            return (
-              <div key={m.id} className={`${styles.item} ${severityClass}`}>
-                <div className={styles.itemText}>
-                  {m.code ? (
-                    // <a
-                    //   href={codeHref(m.code)}
-                    //   target="_blank"
-                    //   rel="noopener noreferrer"
-                    //   className={styles.itemCodeLink}
-                    // >
-                    //   <strong>[{m.code}]</strong>
-                    // </a>
-                    <strong>[{m.code}]</strong>
-                  ) : null}
-                  <br></br>
-                  {m.text}
-                </div>
-                {m.systemId || m.zoneId || m.enclosureId ? (
-                  <div className={styles.itemPath}>{pathFor(m)}</div>
-                ) : null}
-              </div>
-            );
-          })
-        )}
-      </div>
-
       {hasErrors && (
-        <div className={styles.blocker}>
-          Actions (Generate BOM + Submit Project) are disabled until errors are
-          resolved.
+        <div>
+          <div className={styles.blocker}>
+            Actions (Generate BOM + Submit Project) are disabled until errors
+            are resolved.
+          </div>
+          <br></br>
         </div>
       )}
+      <div className={styles.statusConsoleWrap}>
+        <div
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          className={styles.log}
+        >
+          {status.length === 0 ? (
+            <div className={styles.empty}>
+              No messages yet. Click <strong>Calculate</strong> to run checks.
+            </div>
+          ) : (
+            status.map((m) => {
+              const severityClass =
+                m.severity === "error"
+                  ? styles.itemError
+                  : m.severity === "warn"
+                    ? styles.itemWarn
+                    : styles.itemInfo;
+              return (
+                <div key={m.id} className={`${styles.item} ${severityClass}`}>
+                  <div className={styles.itemText}>
+                    {m.code ? (
+                      // <a
+                      //   href={codeHref(m.code)}
+                      //   target="_blank"
+                      //   rel="noopener noreferrer"
+                      //   className={styles.itemCodeLink}
+                      // >
+                      //   <strong>[{m.code}]</strong>
+                      // </a>
+                      <strong>[{m.code}]</strong>
+                    ) : null}
+                    <br></br>
+                    {m.text}
+                  </div>
+                  {m.systemId || m.zoneId || m.enclosureId ? (
+                    <div className={styles.itemPath}>{pathFor(m)}</div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </section>
   );
 }

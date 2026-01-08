@@ -1,5 +1,5 @@
 // src/core/bom/priceList.loader.ts
-const LOCAL_REL = "database/victaulic-vortex-pricelist-2025.xlsx";
+const LOCAL_REL = "database/victaulic-vortex-pricelist.xlsx";
 
 export async function loadPriceListBytes(url?: string): Promise<Uint8Array> {
   if (typeof window !== "undefined" && (window as any).vortex) {

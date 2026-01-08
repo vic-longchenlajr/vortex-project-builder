@@ -73,19 +73,19 @@ export default function ConfiguratorPage() {
 
 function Scaffold() {
   const { project, addSystem, clearProject, runCalculateAll } = useAppModel();
-  const [showPreModal, setShowPreModal] = React.useState(false);
 
-  // 🔹 Listen for Enter globally
+  const [showPreModal, setShowPreModal] = React.useState(false);
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+
+  // Global Enter => Calculate
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // optional: ignore if focused in a textarea, select, or button
       const target = e.target as HTMLElement;
+      if (target.closest("[data-no-enter-calc='1']")) return;
       const tag = target?.tagName?.toLowerCase();
       const isTextInput =
         tag === "input" || tag === "select" || tag === "textarea";
-
       if (e.key === "Enter" && isTextInput) {
-        // prevent default form submission behavior
         e.preventDefault();
         runCalculateAll();
       }
@@ -93,53 +93,55 @@ function Scaffold() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [runCalculateAll]);
-  const onAddEngineered = () => addSystem("engineered");
 
+  const onAddEngineered = () => addSystem("engineered");
   const onAddPreClick = () => {
     if (shouldShowPreEngPrereq()) setShowPreModal(true);
     else addSystem("preengineered");
   };
-
   const onProceedPre = () => {
     setShowPreModal(false);
     addSystem("preengineered");
   };
 
   return (
-    <div className={styles.container}>
+    <div
+      className={styles.container}
+      data-sidebar-open={sidebarOpen ? "1" : "0"}
+    >
       <div className={styles.grid}>
-        {/* LEFT */}
+        {/* LEFT: Project Options */}
         <div className={`${styles.leftCol} ${styles.sticky}`}>
-          <PricePanel />
+          {/* toggle sits INSIDE the sticky column */}
+          <button
+            className={styles.leftColHandle}
+            aria-label={
+              sidebarOpen
+                ? "Collapse project options"
+                : "Expand project options"
+            }
+            title={sidebarOpen ? "Collapse" : "Expand"}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? "«" : "»"}
+          </button>
+
           <ProjectOptionsCard />
         </div>
 
         {/* MIDDLE */}
         <div className={styles.midCol}>
-          <h1 className={styles.builderTitle}>Project Builder</h1>
+          {/* NEW sticky wrapper for title + controls */}
+          <div className={styles.midSticky}>
+            <h1 className={styles.builderTitle}>Project Builder</h1>
 
-          <div className={styles.addBar}>
-            <button
-              className={`${styles.btn} ${styles.btnSoft} ${styles.btnSoftEng}`}
-              onClick={onAddEngineered}
-            >
-              + Add Engineered System
-            </button>
-            <button
-              className={`${styles.btn} ${styles.btnSoft} ${styles.btnSoftPre}`}
-              onClick={onAddPreClick}
-            >
-              + Add Pre-Engineered System
-            </button>{" "}
-            <button
-              className={`${styles.btn} ${styles.btnDanger}`}
-              onClick={clearProject}
-              title="Reset the entire project"
-              style={{ marginLeft: "auto" }}
-            >
-              Clear Project
-            </button>
+            <ControlBar
+              onAddEngineered={onAddEngineered}
+              onAddPreClick={onAddPreClick}
+              onClearProject={clearProject}
+            />
           </div>
+
           <PreEngPrereqModal
             open={showPreModal}
             onCancel={() => setShowPreModal(false)}
@@ -151,10 +153,10 @@ function Scaffold() {
           ))}
         </div>
 
-        {/* RIGHT */}
-        <div className={`${styles.rightCol}`}>
+        {/* RIGHT: Pricing + tall Status */}
+        <div className={styles.rightCol}>
+          <PricePanel />
           <StatusConsole />
-          <FunctionButtons />
         </div>
       </div>
     </div>
@@ -162,78 +164,122 @@ function Scaffold() {
 }
 
 /* ───────────────────────────────
-   LEFT: PRICING + PROJECT OPTIONS
+   CONTROL BAR (Actions + Add buttons)
    ─────────────────────────────── */
 
-function PricePanel() {
-  const { project, projectListPrice, updateProject } = useAppModel();
+function ControlBar({
+  onAddEngineered,
+  onAddPreClick,
+  onClearProject,
+}: {
+  onAddEngineered: () => void;
+  onAddPreClick: () => void;
+  onClearProject: () => void;
+}) {
+  const {
+    runCalculateAll,
+    hasErrors,
+    exportProjectToFile,
+    triggerImportFilePicker,
+    generateEngineeredBOM,
+    project,
+  } = useAppModel();
 
-  const currency = project.currency || "USD";
-  const listPriceNum =
-    projectListPrice == null ? null : Number(projectListPrice) || 0;
-
-  const multiplier =
-    typeof project.customerMultiplier === "number"
-      ? project.customerMultiplier
-      : 1;
-
-  const listPrice =
-    listPriceNum == null
-      ? "—"
-      : listPriceNum.toLocaleString(undefined, {
-          style: "currency",
-          currency,
-        });
-
-  const netPriceStr =
-    listPriceNum == null
-      ? "—"
-      : (listPriceNum * multiplier).toLocaleString(undefined, {
-          style: "currency",
-          currency,
-        });
-
-  const onMultiplierChange = (raw: string) => {
-    let v = parseFloat(raw);
-    if (Number.isNaN(v)) v = 0;
-    if (v < 0) v = 0;
-    if (v > 1) v = 1;
-    // keep two decimals consistent with step=0.01
-    updateProject({ customerMultiplier: Math.round(v * 100) / 100 });
+  const onSubmitProject = () => {
+    if (hasErrors) return;
+    const to = "fireprotection@victaulic.com";
+    const cc = (project?.email || "").trim();
+    const subject =
+      `Victaulic Vortex Project Submission — ` +
+      (project?.name?.trim() || "Untitled Project");
+    const lines = [
+      "Please attach the project file below for submission to Customer Care for ordering or estimation.",
+      "",
+      "Project Details:",
+      `Project: ${project?.name || "Untitled Project"}`,
+      `Company: ${project?.companyName || ""}`,
+      `Contact: ${project?.firstName || ""} ${project?.lastName || ""}`.trim(),
+      `Phone: ${project?.phone || ""}`,
+      `Email: ${project?.email || ""}`,
+    ];
+    const body = lines.join("\r\n");
+    const parts: string[] = [];
+    if (cc) parts.push(`cc=${encodeURIComponent(cc)}`);
+    parts.push(`subject=${encodeURIComponent(subject)}`);
+    parts.push(`body=${encodeURIComponent(body)}`);
+    const href = `mailto:${to}?${parts.join("&")}`;
+    window.location.href = href;
   };
 
   return (
-    <section className={`${styles.section} ${styles.priceCard}`}>
-      <h3 className={styles.priceTitle}>Pricing</h3>
+    <div className={styles.controlBar}>
+      <div className={styles.controlGroupPrimary}>
+        <button
+          className={`${styles.btn} ${styles.btnPrimary}`}
+          onClick={runCalculateAll}
+        >
+          Calculate
+        </button>
+        <button
+          className={styles.btn}
+          disabled={hasErrors}
+          onClick={generateEngineeredBOM}
+          title={
+            hasErrors ? "Resolve errors before generating BOM" : "Generate BOM"
+          }
+        >
+          Generate BOM
+        </button>
+        <button className={styles.btn} onClick={triggerImportFilePicker}>
+          Import
+        </button>
+        <button className={styles.btn} onClick={exportProjectToFile}>
+          Export
+        </button>
+        <button
+          className={styles.btn}
+          disabled={hasErrors}
+          onClick={onSubmitProject}
+          title={
+            hasErrors
+              ? "Resolve errors before submitting the project"
+              : "Submit project via email"
+          }
+        >
+          Submit
+        </button>
+      </div>
 
-      <div className={styles.priceRow}>
-        <span>List Price:</span>
-        <span className={styles.priceValue}>{listPrice}</span>
+      <div className={styles.controlGroupSecondary}>
+        <button
+          className={`${styles.btn} ${styles.btnSoft} ${styles.btnSoftEng}`}
+          onClick={onAddEngineered}
+          title="Add Engineered System"
+        >
+          + Add Engineered
+        </button>
+        <button
+          className={`${styles.btn} ${styles.btnSoft} ${styles.btnSoftPre}`}
+          onClick={onAddPreClick}
+          title="Add Pre-Engineered System"
+        >
+          + Add Pre-Engineered
+        </button>
+        <button
+          className={`${styles.btn} ${styles.btnDanger}`}
+          onClick={onClearProject}
+          title="Reset the entire project"
+        >
+          Clear Project
+        </button>
       </div>
-      <div className={styles.priceRow}>
-        <span>Net Price:</span>
-        <span className={styles.priceValue}>{netPriceStr}</span>
-      </div>
-
-      <div className={styles.priceRow}>
-        <label htmlFor="cust-mult" title="0.00–1.00">
-          Multiplier:
-        </label>
-        <input
-          id="cust-mult"
-          type="number"
-          min={0}
-          max={1}
-          step={0.01}
-          value={toInputValue(multiplier)}
-          onChange={(e) => onMultiplierChange(e.target.value)}
-          className={styles.inputXs}
-          style={{ textAlign: "right" }}
-        />
-      </div>
-    </section>
+    </div>
   );
 }
+
+/* ───────────────────────────────
+   LEFT: PROJECT OPTIONS
+   ─────────────────────────────── */
 
 const ELEVATION_OPTIONS = [
   { v: "-3000FT/-0.92KM", label: "-3000 ft / -0.92 km" },
@@ -357,13 +403,114 @@ function ProjectOptionsCard() {
 }
 
 /* ───────────────────────────────
-   MIDDLE: SYSTEMS
+   RIGHT: PRICING
+   ─────────────────────────────── */
+
+function PricePanel() {
+  const { project, projectListPrice, updateProject } = useAppModel();
+
+  const currency = project.currency || "USD";
+  const listPriceNum =
+    projectListPrice == null ? null : Number(projectListPrice) || 0;
+
+  const multiplier =
+    typeof project.customerMultiplier === "number"
+      ? project.customerMultiplier
+      : 1;
+
+  const listPrice =
+    listPriceNum == null
+      ? "—"
+      : listPriceNum.toLocaleString(undefined, {
+          style: "currency",
+          currency,
+        });
+
+  const netPriceStr =
+    listPriceNum == null
+      ? "—"
+      : (listPriceNum * multiplier).toLocaleString(undefined, {
+          style: "currency",
+          currency,
+        });
+
+  const onMultiplierChange = (raw: string) => {
+    let v = parseFloat(raw);
+    if (Number.isNaN(v)) v = 0;
+    if (v < 0) v = 0;
+    if (v > 1) v = 1;
+    updateProject({ customerMultiplier: Math.round(v * 100) / 100 });
+  };
+
+  return (
+    <section className={`${styles.section} ${styles.priceCard}`}>
+      <h3 className={styles.priceTitle}>Pricing</h3>
+
+      <div className={styles.priceRow}>
+        <span>List Price:</span>
+        <span className={styles.priceValue}>{listPrice}</span>
+      </div>
+      <div className={styles.priceRow}>
+        <span>Net Price:</span>
+        <span className={styles.priceValue}>{netPriceStr}</span>
+      </div>
+
+      <div className={styles.priceRow}>
+        <label htmlFor="cust-mult" title="0.00–1.00">
+          Multiplier:
+        </label>
+        <input
+          id="cust-mult"
+          type="number"
+          min={0}
+          max={1}
+          step={0.01}
+          value={toInputValue(multiplier)}
+          onChange={(e) => onMultiplierChange(e.target.value)}
+          className={`${styles.inputNumSm}`}
+          style={{ textAlign: "right" }}
+        />
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────────────
+   MIDDLE: Systems / Zones / Tables
+   (UNCHANGED functional components below)
    ─────────────────────────────── */
 
 function SystemCard({ sys }: { sys: any }) {
-  const { updateSystem, removeSystem, addZone, changeSystemType } =
-    useAppModel();
+  const {
+    updateSystem,
+    removeSystem,
+    addZone,
+    changeSystemType,
+    updateSystemOptions,
+    applyPreEngSystemPartcode,
+    runCalculateAll,
+  } = useAppModel();
   const isPre = sys.type === "preengineered";
+
+  const preOpts = isPre ? (sys.options as any) : null;
+  const systemPartCode: string = preOpts?.systemPartCode ?? "";
+  const systemPartCodeLocked: boolean = !!preOpts?.systemPartCodeLocked;
+  const [pcDraft, setPcDraft] = React.useState(systemPartCode);
+
+  React.useEffect(() => {
+    setPcDraft(systemPartCode ?? "");
+  }, [systemPartCode]);
+
+  const commitPartcode = (alsoCalculate: boolean) => {
+    // Store draft first
+    updateSystemOptions(sys.id, { systemPartCode: pcDraft } as any);
+
+    // Apply decode + format + lock
+    applyPreEngSystemPartcode(sys.id);
+
+    // A: Apply on Calculate too (Enter triggers Calculate here)
+    if (alsoCalculate) runCalculateAll();
+  };
 
   return (
     <section
@@ -384,8 +531,9 @@ function SystemCard({ sys }: { sys: any }) {
       </div>
 
       <div className={styles.controlsRow}>
-        <label>
-          System Name:&nbsp;
+        {/* existing system name + type */}
+        <label className={styles.labelGroup}>
+          System Name:
           <input
             value={sys.name}
             onChange={(e) => updateSystem(sys.id, { name: e.target.value })}
@@ -393,16 +541,57 @@ function SystemCard({ sys }: { sys: any }) {
           />
         </label>
 
-        <label>
-          Type:&nbsp;
+        <label className={styles.labelGroup}>
+          Type:
           <select
             value={sys.type}
             onChange={(e) => changeSystemType(sys.id, e.target.value as any)}
+            className={styles.inputMd}
           >
             <option value="engineered">Engineered</option>
             <option value="preengineered">Pre-Engineered</option>
           </select>
         </label>
+
+        {/* NEW: Pre-eng System Partcode control */}
+        {isPre && (
+          <label className={styles.partcodeGroup}>
+            <span className={styles.partcodeLabel}>
+              <input
+                type="checkbox"
+                checked={systemPartCodeLocked}
+                onChange={(e) => {
+                  const locked = e.target.checked;
+                  updateSystemOptions(sys.id, {
+                    systemPartCodeLocked: locked,
+                  } as any);
+                  // Actual normalize/regen handled inside calcSystem
+                }}
+              />
+              System Partcode:
+            </span>
+            <input
+              className={styles.inputMd}
+              value={systemPartCode}
+              disabled={!systemPartCodeLocked}
+              onChange={(e) =>
+                updateSystemOptions(sys.id, {
+                  systemPartCode: e.target.value,
+                } as any)
+              }
+              onBlur={() => {
+                if (systemPartCodeLocked) applyPreEngSystemPartcode(sys.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && systemPartCodeLocked) {
+                  e.preventDefault();
+                  applyPreEngSystemPartcode(sys.id);
+                }
+              }}
+              placeholder="S-xxx-9PE-xxx-xxx-xx"
+            />
+          </label>
+        )}
 
         <div className={styles.actionsRight}>
           {!isPre && (
@@ -441,8 +630,7 @@ function SystemCard({ sys }: { sys: any }) {
   );
 }
 
-/* ENGINEERED: Zone + Tables */
-
+/* ENGINEERED: Zone + Tables (unchanged, trimmed for brevity) */
 function ZoneCard({
   sysId,
   zone,
@@ -454,11 +642,13 @@ function ZoneCard({
 }) {
   const { updateZone, removeZone, addEnclosure, project } = useAppModel();
 
-  const unitVol = project.units === "metric" ? "m³" : "ft³";
-  const totalVolume = (zone.enclosures ?? []).reduce(
-    (sum: number, e: any) => sum + (Number(e.volume) || 0),
-    0
-  );
+  // Pull the system to see if bulk tubes are enabled for this system
+  const system = project.systems.find((s) => s.id === sysId);
+  const bulkOn = !!(system?.options as any)?.bulkTubes;
+
+  // Default valve-open time (minutes) when bulk is enabled
+  const tOpen = Number(zone.bulkValveOpenTimeMin);
+  const tOpenDisplay = Number.isFinite(tOpen) ? tOpen : 10; // default
 
   return (
     <div
@@ -466,8 +656,8 @@ function ZoneCard({
       className={`${styles.zoneCard} ${styles["stack-tight"] ?? ""}`}
     >
       <div className={styles.zoneHeader}>
-        <label>
-          &nbsp;Zone Name:&nbsp;
+        <label className={styles.labelGroup}>
+          Zone Name:
           <input
             value={zone.name}
             onChange={(e) =>
@@ -496,23 +686,9 @@ function ZoneCard({
         </div>
       </div>
 
-      {/* Quick zone metrics */}
-      {/* <div className={styles.zoneMeta}>
-        <span className={styles.badge}>
-          Enclosures: {(zone.enclosures ?? []).length}
-        </span>
-        <span className={styles.badge}>
-          Total Volume:&nbsp;
-          {totalVolume.toLocaleString(undefined, {
-            maximumFractionDigits: project.units === "metric" ? 3 : 0,
-          })}
-          {unitVol}
-        </span>
-      </div> */}
-
-      {/* INPUT */}
       <div className={`${styles.section} ${styles["section--muted"]}`}>
-        <strong className={styles.resultsHeader}>Input</strong>
+        <div className={styles.resultsHeader}>Input</div>
+
         {zone.enclosures.length === 0 ? (
           <div className={styles.muted} style={{ marginTop: 8 }}>
             <label>No enclosures yet.</label>
@@ -552,7 +728,6 @@ function EngineeredEnclosureTable({
     <div className={styles.enclosureTableWrap}>
       <table className={styles.enclosureTable}>
         <colgroup>
-          <col style={{ width: 44 }} />
           <col />
           <col style={{ width: 104 }} />
           <col style={{ width: 80 }} />
@@ -563,7 +738,6 @@ function EngineeredEnclosureTable({
         </colgroup>
         <thead>
           <tr>
-            <th style={{ width: 1 }}>#</th>
             <th>Enclosure Name</th>
             <th>Volume ({unitVol})</th>
             <th>Temp (°{unitTemp})</th>
@@ -582,8 +756,6 @@ function EngineeredEnclosureTable({
               : [];
             return (
               <tr key={enc.id} id={`enc-${enc.id}`}>
-                <td className={styles.encIndexCell}>{idx + 1}</td>
-
                 <td>
                   <input
                     className={styles.inputMd}
@@ -596,7 +768,6 @@ function EngineeredEnclosureTable({
                     }
                   />
                 </td>
-
                 <td>
                   <input
                     type="number"
@@ -628,6 +799,7 @@ function EngineeredEnclosureTable({
                 <td>
                   <div className={styles.selectWithPill}>
                     <select
+                      className={styles.inputControl}
                       value={enc.method}
                       onChange={(e) => {
                         const m = e.target.value as MethodName;
@@ -657,7 +829,7 @@ function EngineeredEnclosureTable({
 
                 <td>
                   <select
-                    className={styles.nozzleSelect}
+                    className={styles.inputControl}
                     value={enc.nozzleCode ?? ""}
                     onChange={(e) => {
                       const method = enc.method as MethodName;
@@ -679,7 +851,7 @@ function EngineeredEnclosureTable({
 
                 <td>
                   <select
-                    className={styles.styleSelect}
+                    className={styles.inputControl}
                     value={enc.emitterStyle ?? ""}
                     onChange={(e) => {
                       const method = enc.method as MethodName;
@@ -738,9 +910,10 @@ function EnclosureResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
     <table className={`${styles.resultsTable} ${styles.enclosureResults}`}>
       <thead>
         <tr>
-          <th style={{ width: 44 }}>#</th>
           <th>Enclosure</th>
-          <th title="Minimum Emitters">Min. Emitters</th>
+          <th title="Minimum Nozzles">Min. Nozzles</th>
+          <th title="Flow Cartridge">Flow Cartridge Selection</th>
+
           <th title="Estimated Discharge Time">Est. Discharge Time</th>
           <th title="Estimated Final O₂">Est. Final O₂</th>
         </tr>
@@ -753,7 +926,6 @@ function EnclosureResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
 
           return (
             <tr key={enc.id}>
-              <td className="center">{idx + 1}</td>
               <td>{enc.name ?? `Enclosure ${idx + 1}`}</td>
               <td className="center" style={{ whiteSpace: "nowrap" }}>
                 <input
@@ -766,11 +938,11 @@ function EnclosureResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                       ...(e.target.checked ? {} : { customMinEmitters: null }),
                     })
                   }
-                  title="Enable custom emitter count"
+                  title="Enable custom nozzle count"
                   style={{ marginRight: 8 }}
                 />
                 <input
-                  className={styles.controlXS}
+                  className={`${styles.inputNumSm}`}
                   type="number"
                   value={toInputValue(displayEmitters)}
                   onChange={(e) => {
@@ -784,6 +956,7 @@ function EnclosureResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                   style={{ width: 72, textAlign: "right" }}
                 />
               </td>
+              <td className="center">{enc.flowCartridge ?? "—"}</td>
               <td className="center">
                 {enc.estDischarge ?? enc.estimatedDischarge ?? "—"}
               </td>
@@ -804,10 +977,18 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
     (sum: number, e: any) => sum + (Number(e.volume) || 0),
     0
   );
-
   const calcMinCyl = zone.minTotalCylinders ?? null;
   const editCyl = !!zone._editCylinders;
   const displayCyl = zone.customMinTotalCylinders ?? calcMinCyl ?? 0;
+  const system = project.systems.find((s) => s.id === sysId);
+  const bulkOn = !!(system?.options as any)?.bulkTubes;
+  const requiredOpen = Number((zone as any).bulkValveOpenTimeMinRequired);
+  const requiredOpenDisplay = Number.isFinite(requiredOpen) ? requiredOpen : 0;
+
+  const editOpen = !!(zone as any)._editBulkValveOpenTimeMin;
+
+  const tOpen = Number((zone as any).bulkValveOpenTimeMin);
+  const tOpenDisplay = Number.isFinite(tOpen) ? tOpen : requiredOpenDisplay;
 
   return (
     <table className={`${styles.resultsTable} ${styles.zoneResults}`}>
@@ -822,49 +1003,108 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
           <td className={styles.kvValue}>
             {totalVolume.toLocaleString(undefined, {
               maximumFractionDigits: project.units === "metric" ? 3 : 0,
-            })}
+            })}{" "}
             {unitVol}
           </td>
         </tr>
+
+        {bulkOn ? (
+          <tr>
+            <td className={styles.kvLabel}>Bulk Tube Valve Open Time (min)</td>
+            <td
+              className={`${styles.kvValue} ${styles.kvRowRight}`}
+              style={{ display: "flex", gap: 8, alignItems: "center" }}
+            >
+              <input
+                type="checkbox"
+                checked={editOpen}
+                onChange={(e) =>
+                  updateZone(sysId, zone.id, {
+                    _editBulkValveOpenTimeMin: e.target.checked,
+                    ...(e.target.checked
+                      ? {}
+                      : { bulkValveOpenTimeMin: requiredOpenDisplay }),
+                  })
+                }
+                title="Enable custom valve open time (can only increase)"
+              />
+
+              <input
+                className={styles.inputNumSm}
+                type="number"
+                step={0.01}
+                min={requiredOpenDisplay}
+                value={toInputValue(tOpenDisplay)}
+                onChange={(e) =>
+                  updateZone(sysId, zone.id, {
+                    bulkValveOpenTimeMin: fromNumberInput(e.target.value),
+                  })
+                }
+                disabled={!editOpen}
+                style={{ width: 84, textAlign: "right" }}
+                title={
+                  editOpen
+                    ? `Minimum allowed: ${requiredOpenDisplay} min`
+                    : `Auto = ${requiredOpenDisplay} min (enable checkbox to increase)`
+                }
+              />
+            </td>
+          </tr>
+        ) : (
+          <tr>
+            <td className={styles.kvLabel}>Number of Cylinders</td>
+            <td
+              className={`${styles.kvValue} ${styles.kvRowRight}`}
+              style={{ display: "flex", gap: 8, alignItems: "center" }}
+            >
+              <input
+                type="checkbox"
+                checked={editCyl}
+                onChange={(e) =>
+                  updateZone(sysId, zone.id, {
+                    _editCylinders: e.target.checked,
+                    ...(e.target.checked
+                      ? {}
+                      : { customMinTotalCylinders: null }),
+                  })
+                }
+                title="Enable custom cylinder count"
+              />
+              <input
+                className={styles.inputNumSm}
+                type="number"
+                value={toInputValue(displayCyl)}
+                onChange={(e) => {
+                  const val = fromEditableNumber(e.target.value);
+                  updateZone(sysId, zone.id, {
+                    customMinTotalCylinders:
+                      val === "" ? zone.customMinTotalCylinders : val,
+                  });
+                }}
+                disabled={!editCyl}
+                style={{ width: 84, textAlign: "right" }}
+              />
+            </td>
+          </tr>
+        )}
         <tr>
-          <td className={styles.kvLabel}>Total N₂ Requirement</td>
-          <td className={styles.kvValue}>{zone.totalNitrogen ?? "—"}</td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Number of Cylinders</td>
-          <td
-            className={styles.kvValue}
-            style={{ display: "flex", gap: 8, alignItems: "center" }}
-          >
-            <input
-              type="checkbox"
-              checked={editCyl}
-              onChange={(e) =>
-                updateZone(sysId, zone.id, {
-                  _editCylinders: e.target.checked,
-                  ...(e.target.checked
-                    ? {}
-                    : { customMinTotalCylinders: null }),
-                })
-              }
-              title="Enable custom cylinder count"
-            />
-            <input
-              className={styles.controlXS}
-              type="number"
-              value={toInputValue(displayCyl)}
-              onChange={(e) => {
-                const val = fromEditableNumber(e.target.value);
-                updateZone(sysId, zone.id, {
-                  customMinTotalCylinders:
-                    val === "" ? zone.customMinTotalCylinders : val,
-                });
-              }}
-              disabled={!editCyl}
-              style={{ width: 84, textAlign: "right" }}
-            />
+          <td className={styles.kvLabel}>Total N₂ Required</td>
+          <td className={styles.kvValue}>
+            {typeof zone.totalNitrogenRequired_scf === "number"
+              ? `${Math.round(zone.totalNitrogenRequired_scf).toLocaleString()} SCF`
+              : "—"}
           </td>
         </tr>
+
+        <tr>
+          <td className={styles.kvLabel}>Total N₂ Delivered</td>
+          <td className={styles.kvValue}>
+            {typeof zone.totalNitrogenDelivered_scf === "number"
+              ? `${Math.round(zone.totalNitrogenDelivered_scf).toLocaleString()} SCF`
+              : "—"}
+          </td>
+        </tr>
+
         <tr>
           <td className={styles.kvLabel}>Number of Panels</td>
           <td className={styles.kvValue}>
@@ -904,7 +1144,7 @@ function PreZoneBlock({ sys }: { sys: any }) {
     >
       <div className={styles.zoneHeader}>
         <label>
-          &nbsp;Zone Name:&nbsp;
+          Zone Name:
           <input
             value={sys.zones[0].name}
             onChange={(e) =>
@@ -916,7 +1156,7 @@ function PreZoneBlock({ sys }: { sys: any }) {
       </div>
 
       <div className={`${styles.section} ${styles["section--muted"]}`}>
-        <strong className={styles.resultsHeader}>Input</strong>
+        <div className={styles.resultsHeader}>Enclosure Input</div>
         <PreInputTable sysId={sys.id} zone={sys.zones[0]} />
       </div>
 
@@ -925,7 +1165,7 @@ function PreZoneBlock({ sys }: { sys: any }) {
           <PreEnclosureGuidance zone={sys.zones[0]} />
         </div>
         <div className={`${styles.section} ${styles["section--ok"]}`}>
-          <div className={styles.resultsHeader}>Emitter Layout Preview</div>
+          <div className={styles.resultsHeader}>Nozzle Layout Preview</div>
           <EmitterImagePanel zone={sys.zones[0]} />
         </div>
       </div>
@@ -944,19 +1184,20 @@ function EmitterImagePanel({ zone }: { zone: any }) {
   if (!emitters || emitters < 0) {
     return (
       <div className={styles.muted}>
-        Run Calculate to determine emitters and preview the corresponding image.
+        Run Calculate to determine nozzles and preview the recommended nozzle
+        layout.
       </div>
     );
   }
 
   // Images live in /public; filenames are "1.png", "2.png", ...
   const src = `/${emitters}.png`;
-  const alt = `${emitters} emitter${emitters === 1 ? "" : "s"} layout preview`;
+  const alt = `${emitters} nozzle${emitters === 1 ? "" : "s"} layout preview`;
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div className={styles.mutedSm}>
-        Displaying preview for <strong>{emitters}</strong> emitter
+        Displaying preview for <strong>{emitters}</strong> nozzle
         {emitters === 1 ? "" : "s"}.
       </div>
       <div
@@ -991,6 +1232,11 @@ function EmitterImagePanel({ zone }: { zone: any }) {
 
 function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
   const { project, updateEnclosure } = useAppModel();
+  const system = project.systems.find((s) => s.id === sysId);
+  const preOpts = (system?.options as any) ?? {};
+  const locked = !!preOpts.systemPartCodeLocked;
+  const showDash = locked;
+
   const unitLen = project.units === "metric" ? "m" : "ft";
   const unitTemp = project.units === "metric" ? "C" : "F";
 
@@ -1022,7 +1268,6 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
     <div className={styles.enclosureTableWrap}>
       <table className={`${styles.enclosureTable} ${styles.preTable}`}>
         <colgroup>
-          <col style={{ width: 44 }} />
           <col />
           <col style={{ width: 96 }} />
           <col style={{ width: 80 }} />
@@ -1033,7 +1278,6 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
 
         <thead>
           <tr>
-            <th style={{ width: 44 }}>#</th>
             <th>Enclosure Name</th>
             <th title="Length / Width / Height">L/W/H ({unitLen})</th>
             <th>Temp (°{unitTemp})</th>
@@ -1044,8 +1288,6 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
         </thead>
         <tbody>
           <tr id={`enc-${enc.id}`}>
-            <td className={styles.encIndexCell}>1</td>
-
             <td>
               <input
                 className={styles.inputMd}
@@ -1067,12 +1309,14 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                     type="number"
                     step={1}
                     className={styles.dimInput}
-                    value={toInputValue(enc.length)}
                     onChange={(e) =>
                       setDims({
                         length: fromNumberInput(e.target.value) as any,
                       })
                     }
+                    value={showDash ? "" : toInputValue(enc.length)}
+                    placeholder={showDash ? "—" : undefined}
+                    disabled={locked}
                   />
                 </label>
                 <label className={styles.dimRow}>
@@ -1081,10 +1325,12 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                     type="number"
                     step={1}
                     className={styles.dimInput}
-                    value={toInputValue(enc.width)}
+                    value={showDash ? "" : toInputValue(enc.width)}
+                    placeholder={showDash ? "—" : undefined}
                     onChange={(e) =>
                       setDims({ width: fromNumberInput(e.target.value) as any })
                     }
+                    disabled={locked}
                   />
                 </label>
                 <label className={styles.dimRow}>
@@ -1093,12 +1339,14 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                     type="number"
                     step={1}
                     className={styles.dimInput}
-                    value={toInputValue(enc.height)}
+                    value={showDash ? "" : toInputValue(enc.height)}
+                    placeholder={showDash ? "—" : undefined}
                     onChange={(e) =>
                       setDims({
                         height: fromNumberInput(e.target.value) as any,
                       })
                     }
+                    disabled={locked}
                   />
                 </label>
               </div>
@@ -1109,12 +1357,14 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                 type="number"
                 step={1}
                 className={styles.inputXs}
-                value={enc.tempF ?? 70}
                 onChange={(e) =>
                   updateEnclosure(sysId, zone.id, enc.id, {
                     tempF: onNum(e.target.value),
                   })
                 }
+                value={showDash ? "" : (enc.tempF ?? 70)}
+                placeholder={showDash ? "—" : undefined}
+                disabled={locked}
               />
             </td>
 
@@ -1122,6 +1372,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
               <div className={styles.selectWithPill}>
                 <select
                   value={enc.method ?? "NFPA 770 Class A/C"}
+                  className={styles.inputControl}
                   onChange={(e) => {
                     const m = e.target.value as MethodName;
                     const nz = pickDefaultNozzle(m, {
@@ -1136,6 +1387,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                       emitterStyle: st,
                     });
                   }}
+                  disabled={locked}
                 >
                   {[
                     "NFPA 770 Class A/C",
@@ -1152,7 +1404,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
 
             <td>
               <select
-                className={styles.preNozzleSelect}
+                className={styles.inputControl}
                 value={enc.nozzleCode ?? ""}
                 onChange={(e) => {
                   const method = (enc.method ??
@@ -1166,6 +1418,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                     emitterStyle: st,
                   });
                 }}
+                disabled={locked}
               >
                 {nozzleOptions.map((n) => (
                   <option key={n.code} value={n.code}>
@@ -1177,7 +1430,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
 
             <td>
               <select
-                className={styles.preStyleSelect}
+                className={styles.inputControl}
                 value={enc.emitterStyle ?? ""}
                 onChange={(e) => {
                   const method = (enc.method ??
@@ -1191,7 +1444,7 @@ function PreInputTable({ sysId, zone }: { sysId: string; zone: any }) {
                     emitterStyle: styles.includes(chosen) ? chosen : styles[0],
                   });
                 }}
-                disabled={!enc.nozzleCode}
+                disabled={!enc.nozzleCode || locked}
               >
                 {styleOptions.length === 0 ? (
                   <option value="">(no styles)</option>
@@ -1216,63 +1469,6 @@ import {
   fmtFt2AndM2,
 } from "@/core/calc/preengineered/guidance";
 
-function PreSystemResults({ zone }: { zone: any }) {
-  const { project } = useAppModel();
-  const unitVol = project.units === "metric" ? "m³" : "ft³";
-  const enc = (zone.enclosures && zone.enclosures[0]) || {};
-
-  const L = Number(enc.length) || 0;
-  const W = Number(enc.width) || 0;
-  const H = Number(enc.height) || 0;
-  const totalVolume = +(L * W * H).toFixed(project.units === "metric" ? 3 : 0);
-
-  const minEmitters = enc.minEmitters ?? enc.emitterCount ?? "—";
-  const cylinders = enc.cylinderCount ?? "—";
-  const estDischarge = enc.estDischarge ?? enc.estimatedDischarge ?? "—";
-  const estO2 = enc.estFinalO2 ?? enc.o2Final ?? "—";
-
-  return (
-    <table className={styles.resultsTable}>
-      <thead>
-        <tr>
-          <th colSpan={2}>System Totals</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td className={styles.kvLabel}>Total Volume</td>
-          <td className={styles.kvValue}>
-            {totalVolume.toLocaleString(undefined, {
-              maximumFractionDigits: project.units === "metric" ? 3 : 0,
-            })}
-            {unitVol}
-          </td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Minimum # Emitters</td>
-          <td className={styles.kvValue}>{minEmitters}</td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Minimum # Cylinders</td>
-          <td className={styles.kvValue}>{cylinders}</td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Cylinder Size @ Fill Pressure</td>
-          <td className={styles.kvValue}>{enc._cylinderLabel ?? "—"}</td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Estimated Discharge Time</td>
-          <td className={styles.kvValue}>{estDischarge}</td>
-        </tr>
-        <tr>
-          <td className={styles.kvLabel}>Estimated Final O₂</td>
-          <td className={styles.kvValue}>{estO2}</td>
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
 function PreEnclosureGuidance({ zone }: { zone: any }) {
   const { project } = useAppModel();
   const enc = zone.enclosures?.[0];
@@ -1281,20 +1477,30 @@ function PreEnclosureGuidance({ zone }: { zone: any }) {
 
   const openMax = fmtFt2AndM2(g.openMaxFt2);
   const openMin = fmtFt2AndM2(g.openMinFt2);
+  const emitterSize = g.pendent.size;
 
   return (
     <>
       <div className={styles.resultsHeader}>Enclosure Requirements</div>
       <table className={styles.resultsTable}>
+        <thead>
+          <tr>
+            <th>Opening</th>
+            <th>Nozzle</th>
+            <th>Allowable Opening Area</th>
+          </tr>
+        </thead>
         <tbody>
           <tr>
-            <td className={styles.kvLabel}>Max Opening</td>
+            <td className={styles.kvLabel}>Maximum Opening</td>
+            <td>{emitterSize}</td>
             <td>
               {openMax.ft2} ft² / {openMax.m2} m²
             </td>
           </tr>
           <tr>
-            <td className={styles.kvLabel}>Min Opening</td>
+            <td className={styles.kvLabel}>Minimum Opening</td>
+            <td>{emitterSize}</td>
             <td>
               {openMin.ft2} ft² / {openMin.m2} m²
             </td>
@@ -1307,8 +1513,8 @@ function PreEnclosureGuidance({ zone }: { zone: any }) {
         <thead>
           <tr>
             <th>Type</th>
-            <th>Emitter</th>
-            <th>Between Emitters</th>
+            <th>Nozzle</th>
+            <th>Between Nozzles</th>
             <th>Min to Wall</th>
             <th>Foil to Ceiling (A)</th>
           </tr>
@@ -1322,8 +1528,9 @@ function PreEnclosureGuidance({ zone }: { zone: any }) {
               {g.pendent.minToWallFt} ft / {g.pendent.minToWallM} m
             </td>
             <td>
-              {g.pendent.foilToCeilingIn[0]}–{g.pendent.foilToCeilingIn[1]} in (
-              {g.pendent.foilToCeilingMm[0]}–{g.pendent.foilToCeilingMm[1]} mm)
+              {g.pendent.foilToCeilingIn[0]}–{g.pendent.foilToCeilingIn[1]} in{" "}
+              <br></br> ({g.pendent.foilToCeilingMm[0]}–
+              {g.pendent.foilToCeilingMm[1]} mm)
             </td>
           </tr>
           {g.sidewall && (
@@ -1340,87 +1547,5 @@ function PreEnclosureGuidance({ zone }: { zone: any }) {
         </tbody>
       </table>
     </>
-  );
-}
-
-function FunctionButtons() {
-  const {
-    runCalculateAll, // or runCalculateAllAndPrice if you made a wrapper
-    hasErrors,
-    exportProjectToFile,
-    triggerImportFilePicker,
-    generateEngineeredBOM, // <- NEW
-    project, // <- add this from your model
-  } = useAppModel();
-
-  const onSubmitProject = () => {
-    if (hasErrors) return;
-
-    const to = "fireprotection@victaulic.com";
-    const cc = (project?.email || "").trim();
-
-    const subject =
-      `Victaulic Vortex Project Submission — ` +
-      (project?.name?.trim() || "Untitled Project");
-
-    const lines = [
-      "Please attach the project file below for submission to Customer Care for ordering or estimation.",
-      "",
-      "Project Details:",
-      `Project: ${project?.name || "Untitled Project"}`,
-      `Company: ${project?.companyName || ""}`,
-      `Contact: ${project?.firstName || ""} ${project?.lastName || ""}`.trim(),
-      `Phone: ${project?.phone || ""}`,
-      `Email: ${project?.email || ""}`,
-    ];
-
-    // Use CRLF for widest mail client compatibility
-    const body = lines.join("\r\n");
-
-    const parts: string[] = [];
-    if (cc) parts.push(`cc=${encodeURIComponent(cc)}`);
-    parts.push(`subject=${encodeURIComponent(subject)}`);
-    parts.push(`body=${encodeURIComponent(body)}`);
-
-    const href = `mailto:${to}?${parts.join("&")}`;
-    window.location.href = href;
-  };
-  return (
-    <section className={styles.section}>
-      <h3 style={{ marginTop: 0 }}>Actions</h3>
-      <div className={styles.btnStack}>
-        <button
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          onClick={runCalculateAll}
-        >
-          Calculate
-        </button>
-        <button
-          className={styles.btn}
-          disabled={hasErrors}
-          onClick={generateEngineeredBOM}
-        >
-          Generate BOM
-        </button>
-        <button className={styles.btn} onClick={triggerImportFilePicker}>
-          Import Project
-        </button>
-        <button className={styles.btn} onClick={exportProjectToFile}>
-          Export Project
-        </button>
-        <button
-          className={styles.btn}
-          disabled={hasErrors}
-          onClick={onSubmitProject}
-          title={
-            hasErrors
-              ? "Resolve errors before submitting the project"
-              : "Submit project via email"
-          }
-        >
-          Submit Project
-        </button>
-      </div>
-    </section>
   );
 }

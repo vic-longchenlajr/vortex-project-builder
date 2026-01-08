@@ -1,18 +1,13 @@
 /* ===============================
-   Home page layout (fixed navbar)
+   Guide page layout (fixed navbar)
    =============================== */
 
 .body {
   --nav-h: 96px;
   margin-top: var(--nav-h);
-
-  /* Fill full viewport and beyond if content scrolls */
   min-height: 100vh;
-
-  /* Force the black background all the way down */
   background: #0b1018;
   color: #0e1420;
-
   display: flex;
   flex-direction: column;
 }
@@ -24,377 +19,435 @@
   border-radius: 12px;
   box-shadow: 0 8px 28px rgba(13, 18, 26, 0.08);
   margin: 16px;
-  padding: 28px;
+  padding: 32px;
 }
-.sectionFull {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0;
-}
+
 .light {
   background: #ffffff;
 }
+
 .dark {
   background: #0f1521;
-  color: #dfe6ff;
-}
-.black {
-  background: #0b0f17;
   color: #e8edff;
-}
-
-.sectionHeading {
-  margin: 0 0 14px 0;
-  font-size: 28px;
-  letter-spacing: 0.3px;
-  color: inherit;
-}
-
-/* ========== HERO ========== */
-.hero {
   position: relative;
-  background: #000; /* pure black to blend with cylinders.png */
-}
-.heroInner {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 24px;
-  align-items: center;
-  padding: 44px 24px 56px;
-}
-.heroCopy {
-  max-width: 720px;
-}
-.heroTitle {
-  margin: 0 0 10px 0;
-  color: #fff;
-  font-size: 42px;
-  letter-spacing: 0.2px;
-  line-height: 1.06;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
-}
-.heroSub {
-  margin: 0 0 18px 0;
-  color: #d7dcef;
-  font-size: 17px;
-  line-height: 1.6;
-}
-.ctaRow {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  overflow: hidden;
 }
 
-.btnPrimary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 16px;
-  border-radius: 8px;
-  background: #ff6900;
-  color: #fff;
-  text-decoration: none;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  transition:
-    transform 0.06s ease,
-    box-shadow 0.15s ease;
-  box-shadow: 0 6px 18px rgba(243, 112, 33, 0.35);
-}
-.btnPrimary:active {
-  transform: translateY(0);
-}
-
-.btnGhost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
-  background: transparent;
-  color: #fff;
-  text-decoration: none;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-}
-.btnGhost:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.heroImageWrap {
-  position: relative;
-  width: 100%;
-  min-height: 420px;
-}
-.heroImage {
-  object-fit: contain;
-  user-select: none;
+/* Subtle pattern overlay for dark sections */
+.dark::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(
+    circle at 25% 25%,
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 50%
+  );
   pointer-events: none;
 }
 
-/* Soft fade edge */
-.heroEdge {
-  height: 52px;
-  background: linear-gradient(
-    180deg,
-    #000 0%,
-    rgba(0, 0, 0, 0.6) 45%,
-    rgba(0, 0, 0, 0) 100%
-  );
+.sectionHeading {
+  margin: 0 0 20px 0;
+  font-size: 32px;
+  letter-spacing: 0.3px;
+  color: inherit;
+  position: relative;
+  padding-bottom: 12px;
 }
 
-/* ========== FEATURES ========== */
-.cardGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+/* Add accent underline to light section headings */
+.light .sectionHeading::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: #ff6900;
+  border-radius: 2px;
 }
-.card {
+
+/* ========== Unified Navigator ========== */
+.guideNav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.navCard {
+  display: block;
   background: #fbfcff;
   border: 1px solid #e8edf6;
   border-radius: 10px;
-  padding: 16px;
-  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.06);
-}
-.card h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-}
-.card p {
-  margin: 0;
-  color: #2a3344;
-  line-height: 1.55;
+  padding: 18px 20px;
+  text-decoration: none;
+  color: #0e1420;
+  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.05);
+  transition: all 0.2s ease;
 }
 
-/* ========== ABOUT (split) ========== */
-.split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+.navCard:hover {
+  transform: translateY(-2px);
+  border-color: #d7dff0;
+  box-shadow: 0 10px 24px rgba(13, 18, 26, 0.1);
 }
-.splitCol {
+
+.navCardTitle {
+  font-weight: 700;
   font-size: 16px;
-  line-height: 1.6;
-}
-.bullets {
-  margin: 0;
-  padding-left: 18px;
+  margin-bottom: 6px;
+  color: #0f1521;
 }
 
-/* ========== RESOURCES TABLE ========== */
+.navCardDesc {
+  font-size: 14px;
+  color: #3a4251;
+  line-height: 1.5;
+}
+
+/* Primary CTA card */
+.navCardPrimary {
+  background: #ff6900;
+  color: #fff;
+  border-color: #ff6900;
+  box-shadow: 0 8px 22px rgba(243, 112, 33, 0.28);
+}
+
+.navCardPrimary .navCardTitle {
+  color: #fff;
+}
+
+.navCardPrimary .navCardDesc {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.navCardPrimary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+}
+
+/* ========== Knowledge Base Items ========== */
+.kb {
+  margin: 20px 0;
+  display: grid;
+  gap: 12px;
+}
+
+.kbItem {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+.kbItem strong {
+  color: #dfe6ff;
+  font-weight: 700;
+}
+
+.kbDash {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+/* ========== Workflow Images ========== */
+.workflowBlock {
+  margin: 32px 0;
+}
+
+.workflowImg {
+  width: 85%;
+  max-width: 1200px;
+  height: auto;
+  margin: 0 auto 20px;
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(13, 18, 26, 0.12);
+}
+
+.workflowCaption {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.workflowCaption h3 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  color: #0f1521;
+}
+
+.workflowCaption ol {
+  margin: 0;
+  padding-left: 24px;
+  line-height: 1.7;
+}
+
+.workflowCaption li {
+  margin-bottom: 10px;
+  color: #3a4251;
+}
+
+.workflowCaption li:last-child {
+  margin-bottom: 0;
+}
+
+/* ========== Tables ========== */
 .tableWrap {
   overflow-x: auto;
+  max-width: 100%;
 }
+
+/* Dark table (for Resources, Design Methods) */
 .table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  position: relative;
+  z-index: 1;
 }
+
 .table th,
 .table td {
   text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid #dfe6ff;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   white-space: normal;
+  vertical-align: top;
+  line-height: 1.6;
 }
+
 .table th {
   background: rgba(255, 255, 255, 0.08);
   color: #dfe6ff;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
+
 .table td {
-  color: #dfe6ff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e0e6f5;
 }
+
 .table tbody tr:nth-child(odd) {
   background: rgba(255, 255, 255, 0.03);
 }
+
 .table tbody tr:hover {
-  background: rgba(243, 112, 33, 0.1); /* subtle accent highlight */
+  background: rgba(243, 112, 33, 0.1);
 }
-/* Inside your table style */
+
 .table th:first-child,
 .table td:first-child {
-  white-space: nowrap; /* keep the sheet name on one line */
+  white-space: nowrap;
 }
 
-.table th:nth-child(2),
-.table td:nth-child(2) {
-  white-space: normal;
-}
-
-/* ========== light resources TABLE ========== */
+/* Light table (for Error Codes) */
 .tableLight {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  table-layout: fixed;
 }
+
+.tableLight th:nth-child(1),
+.tableLight td:nth-child(1) {
+  width: 200px;
+  white-space: nowrap;
+}
+
+.tableLight th:nth-child(2),
+.tableLight td:nth-child(2) {
+  width: 180px;
+  white-space: nowrap;
+}
+
+.tableLight th:nth-child(3),
+.tableLight td:nth-child(3) {
+  width: 280px;
+  white-space: normal;
+}
+
+.tableLight th:nth-child(4),
+.tableLight td:nth-child(4) {
+  width: 280px;
+  white-space: normal;
+}
+
 .tableLight th,
 .tableLight td {
   text-align: left;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid #e8edf6;
-  white-space: nowrap;
+  word-wrap: break-word;
+  vertical-align: top;
+  line-height: 1.5;
 }
+
 .tableLight th {
-  background: rgba(255, 255, 255, 0.08);
-  color: black;
+  background: #f5f7fa;
+  color: #0f1521;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tableLight td {
+  color: #3a4251;
+}
+
+.tableLight tbody tr:nth-child(odd) {
+  background: #fafbfc;
+}
+
+.tableLight tbody tr:hover {
+  background: rgba(243, 112, 33, 0.1);
+}
+
+.tableLight code {
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #0f1521;
   font-weight: 600;
 }
-.tableLight td {
-  color: black;
-}
-.tableLight tbody tr:nth-child(odd) {
-  background: lightgrey;
-}
-.tableLight tbody tr:hover {
-  background: rgba(243, 112, 33, 0.1); /* subtle accent highlight */
+
+.tableLight tr[id] {
+  scroll-margin-top: 120px;
 }
 
-.link {
-  color: #ff6900;
-  text-decoration: none;
-}
-.link:hover {
-  text-decoration: underline;
+/* ========== FAQ ========== */
+.faqGrid {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  margin-top: 8px;
 }
 
-/* ========== CONTACT ========== */
-.contactGrid {
+.faqGroup {
+  flex: 1 1 0;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  gap: 10px;
 }
-.contactHeading {
-  margin: 0 0 8px 0;
+
+.faqGroupTitle {
+  margin: 12px 0 8px 0;
   font-size: 18px;
-  color: #0e1420;
+  font-weight: 700;
+  color: #0f1521;
+  opacity: 0.9;
 }
-.kv {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 8px;
+
+.faqItem {
+  border: 1px solid #e6eaf3;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 16px;
+  transition: all 0.15s ease;
+}
+
+.faqItem:hover {
+  border-color: #d7dff0;
+  box-shadow: 0 4px 12px rgba(13, 18, 26, 0.06);
+}
+
+.faqItem > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  outline: none;
+  color: #0f1521;
+  font-size: 15px;
+}
+
+.faqItem[open] > summary {
+  color: #ff6900;
+  margin-bottom: 8px;
+}
+
+.faqItem > summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqBody {
+  margin-top: 8px;
+  color: #3a4251;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.faqBody ul {
   margin: 8px 0;
-  color: #0e1420;
-}
-.kv span:first-child {
-  color: #0e1420;
+  padding-left: 20px;
 }
 
-/* Footer */
-.footer {
-  margin-top: 18px;
-  color: #90a1c9;
-  font-size: 12px;
-  text-align: right;
+.faqBody li {
+  margin-bottom: 6px;
 }
 
-/* ========== Responsive ========== */
-@media (max-width: 1100px) {
-  .cardGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .heroInner {
-    grid-template-columns: 1fr;
-  }
-  .heroImageWrap {
-    min-height: 320px;
-  }
-}
-
-@media (max-width: 820px) {
-  .body {
-    --nav-h: 60px;
-  } /* match your mobile navbar height */
-  .section {
-    margin: 10px;
-    padding: 20px;
-    border-radius: 10px;
-  }
-  .sectionHeading {
-    font-size: 22px;
-  }
-  .split {
-    grid-template-columns: 1fr;
-  }
-  .contactGrid {
-    grid-template-columns: 1fr;
-  }
-  .heroTitle {
-    font-size: 32px;
-  }
-  .heroSub {
-    font-size: 15px;
-  }
-  .cardGrid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Keep anchor targets from hiding under fixed navbar */
-.section,
-#learn-more {
-  scroll-margin-top: calc(var(--nav-h) + 8px);
-}
-/* ===== Burger-stack hierarchy ===== */
+/* ========== Project Hierarchy Stack ========== */
 .stackWrap {
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
-/* Project bar that spans both columns */
 .projectBar {
   grid-column: 1 / -1;
-  margin: 0 auto 10px;
-  width: calc(
-    360px * 2 + 28px
-  ); /* same visual width as two stacks together on desktop */
+  margin: 0 auto 16px;
+  width: calc(360px * 2 + 28px);
   max-width: 92vw;
   text-align: center;
 }
 
-/* Two side-by-side stacks */
 .stackGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
   align-items: start;
   justify-items: center;
+  position: relative;
+  z-index: 1;
 }
 
-/* Each vertical stack */
 .stack {
   width: 360px;
   max-width: 92vw;
   display: grid;
   gap: 12px;
   position: relative;
-  padding-left: 0; /* no bullets */
+  padding-left: 0;
 }
 
-/* Subtle vertical line behind steps for “stack” look */
 .stack::before {
   content: "";
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: 34px; /* starts just under first card corner */
-  bottom: 34px; /* ends just above last card corner */
+  top: 34px;
+  bottom: 34px;
   width: 2px;
-  background: #d9e0ef;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
   opacity: 0.8;
   pointer-events: none;
 }
 
-/* A step = card + short connector nubs above/below */
 .step {
   position: relative;
   display: grid;
   justify-items: center;
 }
+
 .step::before,
 .step::after {
   content: "";
@@ -403,233 +456,223 @@
   transform: translateX(-50%);
   width: 2px;
   height: 10px;
-  background: #d9e0ef;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
   z-index: 0;
 }
+
 .step::before {
   top: -10px;
-} /* nub up to previous */
+}
+
 .step::after {
   bottom: -10px;
-} /* nub down to next */
+}
 
-/* Don’t draw extra nubs for the first and last items */
 .stepTop::before {
   display: none;
 }
+
 .stepBottom::after {
   display: none;
 }
 
-/* Card styles (reuse theme) */
 .node {
   position: relative;
   z-index: 1;
-  background: #dfe6ff;
-  border: 1px solid #d9e0ef;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 12px 18px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f1521;
-  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.06);
+  color: #e8edff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
   width: 100%;
   text-align: center;
 }
+
 .nodeStrong {
-  background: #dfe6ff;
+  background: rgba(255, 255, 255, 0.1);
   font-weight: 700;
 }
+
 .nodePrimary {
-  background: #dfe6ff;
-  color: black;
-  border-color: #0f1521;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  background: #ff6900;
+  color: #fff;
+  border-color: #ff6900;
+  box-shadow: 0 8px 22px rgba(243, 112, 33, 0.35);
 }
 
-/* Multiplicity chip */
 .badge {
   margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #333d66;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
   font-size: 12px;
   font-weight: 800;
-  border: 1px solid #d9e0ef;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Responsive */
+/* ========== Contact ========== */
+.contactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  color: black;
+  margin-top: 8px;
+}
+
+.contactGrid > div {
+  border-left: 3px solid #ff6900;
+  padding-left: 20px;
+  transition: all 0.2s ease;
+}
+
+.contactGrid > div:hover {
+  border-left-color: #ff8533;
+  padding-left: 24px;
+}
+
+.contactHeading {
+  margin: 0 0 12px 0;
+  font-size: 19px;
+  color: #0f1521;
+  font-weight: 700;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  margin: 10px 0;
+  color: #3a4251;
+  font-size: 15px;
+}
+
+.kv span:first-child {
+  color: #5a6478;
+  font-weight: 600;
+}
+
+.link {
+  color: #ff6900;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.link:hover {
+  color: #ff8533;
+  text-decoration: underline;
+}
+
+/* Footer */
+.footer {
+  margin-top: 24px;
+  color: #90a1c9;
+  font-size: 12px;
+  text-align: right;
+  padding-top: 16px;
+  border-top: 1px solid #e6eaf3;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 1200px) {
+  .guideNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tableLight th:nth-child(1),
+  .tableLight td:nth-child(1) {
+    width: 180px;
+  }
+
+  .tableLight th:nth-child(2),
+  .tableLight td:nth-child(2) {
+    width: 160px;
+  }
+
+  .tableLight th:nth-child(3),
+  .tableLight td:nth-child(3) {
+    width: 240px;
+  }
+}
+
 @media (max-width: 980px) {
   .projectBar {
     width: 360px;
   }
+
   .stackGrid {
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  .stack::before {
-    left: 50%;
-  }
 }
 
-.faqNav {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-.faqNav a {
-  font-size: 0.9rem;
-  text-decoration: none;
-  padding: 6px 10px;
-  border: 1px solid #e6eaf3;
-  border-radius: 999px;
-}
-.faqGrid {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start; /* keep both columns top-aligned */
-}
-.faqGroup {
-  flex: 1 1 0; /* two equal columns */
-  min-width: 0; /* prevents overflow issues */
-  display: grid;
-  gap: 8px;
-}
-
-/* keep the mobile stack */
 @media (max-width: 899px) {
   .faqGrid {
     flex-direction: column;
   }
 }
-.faqGroupTitle {
-  margin: 8px 0;
-  font-size: 1rem;
-  opacity: 0.8;
-}
-.faqItem {
-  border: 1px solid #e6eaf3;
-  border-radius: 10px;
-  background: #fff;
-  padding: 8px 12px;
-}
-.faqItem > summary {
-  cursor: pointer;
-  font-weight: 600;
-  list-style: none;
-  outline: none;
-}
-.faqItem[open] > summary {
-  color: #0b5cff;
-}
-.faqItem > summary::-webkit-details-marker {
-  display: none;
-}
-.faqBody {
-  margin-top: 6px;
-  color: #3a4251;
-  line-height: 1.45;
-}
-.workflowImg {
-  width: 80%;
-  max-width: 1200px;
-  height: auto;
-  margin: 0 auto;
-  display: block;
-}
 
-/* Unified Navigator (light section friendly) */
-.guideNav {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
+@media (max-width: 820px) {
+  .body {
+    --nav-h: 60px;
+  }
 
-.navCard {
-  display: block;
-  background: #fff;
-  border: 1px solid #e6eaf3;
-  border-radius: 10px;
-  padding: 14px 16px;
-  text-decoration: none;
-  color: #0e1420;
-  box-shadow: 0 6px 16px rgba(13, 18, 26, 0.05);
-  transition:
-    transform 80ms ease,
-    box-shadow 140ms ease,
-    border-color 140ms ease;
-}
-.navCard:hover {
-  transform: translateY(-1px);
-  border-color: #d7dff0;
-  box-shadow: 0 8px 22px rgba(13, 18, 26, 0.08);
-}
-.navCard:active {
-  transform: translateY(0);
-}
+  .section {
+    margin: 10px;
+    padding: 24px;
+    border-radius: 10px;
+  }
 
-.navCardTitle {
-  font-weight: 700;
-  font-size: 15px;
-  margin-bottom: 4px;
-}
-.navCardDesc {
-  font-size: 13px;
-  color: #3a4251;
-}
+  .sectionHeading {
+    font-size: 26px;
+    margin-bottom: 16px;
+  }
 
-/* Primary CTA card in the grid */
-.navCardPrimary {
-  background: #ff6900;
-  color: #fff;
-  border-color: #ff6900;
-  box-shadow: 0 8px 22px rgba(243, 112, 33, 0.28);
-}
-.navCardPrimary .navCardDesc {
-  color: rgba(255, 255, 255, 0.95);
-}
-.navCardPrimary:hover {
-  filter: brightness(0.98);
-  transform: translateY(-1px);
-}
+  .contactGrid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
 
-/* Responsive */
-@media (max-width: 1100px) {
-  .guideNav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .workflowImg {
+    width: 95%;
   }
 }
+
 @media (max-width: 680px) {
   .guideNav {
     grid-template-columns: 1fr;
   }
+
+  .tableLight {
+    font-size: 13px;
+  }
+
+  .tableLight th,
+  .tableLight td {
+    padding: 10px 12px;
+  }
+
+  .tableLight th:nth-child(1),
+  .tableLight td:nth-child(1) {
+    width: 140px;
+  }
+
+  .tableLight th:nth-child(2),
+  .tableLight td:nth-child(2) {
+    width: 130px;
+  }
+
+  .tableLight th:nth-child(3),
+  .tableLight td:nth-child(3) {
+    width: 200px;
+  }
 }
 
-/* --- Button tweaks for LIGHT sections --- */
-
-/* Keep .btnPrimary as-is (orange). Create a light-friendly outline. */
-.btnOutline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
-  background: #fff;
-  color: #0e1420;
-  border: 1px solid #e6eaf3;
-  text-decoration: none;
-}
-.btnOutline:hover {
-  border-color: #cfd7ea;
-  background: #fbfcff;
-}
-
-/* Any table row with an id (your Error Code rows) respects the offset */
-.tableLight tr[id] {
-  scroll-margin-top: var(200px);
+/* Keep anchor targets from hiding under fixed navbar */
+.section {
+  scroll-margin-top: calc(var(--nav-h) + 8px);
 }

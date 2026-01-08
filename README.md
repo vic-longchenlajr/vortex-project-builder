@@ -18,6 +18,14 @@ It provides engineers, estimators, and project managers with a fast and reliable
 - **Autosave and restore** project state automatically
 - Available as an **Electron desktop application** (offline capable)
 
+### Validation & Status Feedback
+
+The configurator provides real-time validation via a centralized Status Console:
+
+- Errors, Warnings, and Info messages are grouped by severity
+- Messages include system, zone, and enclosure context
+- Critical errors block BOM generation and project submission until resolved
+
 ### Engineered Systems
 
 - Unified calculation engine for NFPA 770 and FM methods
@@ -73,6 +81,11 @@ If you need to locate where the app was installed:
 
 ---
 
+## ⚖️ Engineering Disclaimer
+
+This tool is intended to assist qualified engineers and estimators during system configuration and estimation.  
+Final system designs must be reviewed and approved in accordance with applicable codes, standards, and Victaulic engineering guidance.
+
 ## 📦 Output Files
 
 - **Excel Workbook (.xlsx)** – System summary, zone data, and itemized BOM
@@ -83,7 +96,7 @@ If you need to locate where the app was installed:
 ## 🧭 Repository Information
 
 **Repository Name:** `victaulic-vortex-project-configurator`  
-**Version:** 2.1.0  
+**Version:** 2.1.1
 **License:** Internal Use – Victaulic Fire Suppression Technology  
 **Maintainer:** Fire Suppression Engineering – Easton, PA
 

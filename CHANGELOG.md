@@ -1,4 +1,30 @@
 **Version Control Log:**
+_v2.1.1_
+Universal Updates
+
+- Standardized on rounding to ensure lean and accurately displayed results.
+- Refined configurator ergonomics (sticky headers, improved scroll behavior, reduced layout friction)
+- Moved function buttons to a center header that is visible on all screens.
+- Emitter consolidation updates
+- Added 1/2 brass emitter to FMT and FMMS
+- Expanded system summary behavior with persistent, auto-updating summaries across configuration panels
+- Added tamper resistance kit as standard issue per water tank
+- Improved Excel export robustness (sheet name limits, consistent rounding, clearer BOM grouping)
+- Cleaned up home page + guide layout
+- Improved validation messaging with standardized error codes and clearer remediation guidance
+
+Engineered System Updates
+
+- Reverted battery backups to an editable field and renamed to "Power Supplies"
+- Removed elbow and straight fittings
+- Refactored n2 calculation flow
+- Added bulk tube compatibility
+
+Pre-Engineered System Updates
+
+- Updated enclosure requirements table
+- Added functionality for reverse lookup with system partcode
+- Added panel operating pressure
 
 _v2.1.0_
 

@@ -57,93 +57,83 @@ export default function Home() {
           </div>
           <div className={styles.heroEdge} />
         </section>
-
-        {/* ───────── FEATURES (light) ───────── */}
+        {/* ───────── CORE CAPABILITIES (light) ───────── */}
         <section
           id="learn-more"
           className={`${styles.section} ${styles.light}`}
         >
-          <h2 className={styles.sectionHeading}>Why Use the Configurator</h2>
+          <h2 className={styles.sectionHeading}>Core Capabilities</h2>
 
           <div className={styles.cardGrid}>
             <article className={styles.card}>
-              <h3>Purpose-Built Configuration</h3>
+              <h3>Design & Calculate</h3>
               <p>
                 Build systems with zones and enclosures, select compatible
-                nozzles/styles, and apply method-specific rules (NFPA&nbsp;770,
-                FM Data Centers, and FM Turbines/Machine Spaces).
+                nozzles and styles, and compute nozzle counts, discharge time,
+                oxygen levels, and panel sizing—all with method-specific rules
+                for NFPA 770, FM Data Centers, and FM Turbines/Machine Spaces.
               </p>
             </article>
 
             <article className={styles.card}>
-              <h3>Accurate Sizing</h3>
+              <h3>Validate & Export</h3>
               <p>
-                Compute emitter counts, discharge time, oxygen level, water
-                requirements, and <strong>panel sizing per zone</strong> where
-                applicable—mirroring real design practice.
+                Built-in validation flags incompatible pressures, design
+                mismatches, and spacing violations before you export. Generate a
+                polished Excel workbook with grouped BOM by zone/enclosure,
+                warnings, and monitor/release points—with live pricing.
               </p>
             </article>
 
             <article className={styles.card}>
-              <h3>Smart Validation</h3>
+              <h3>Collaborate & Submit</h3>
               <p>
-                Built-in checks flag issues like incompatible pressures, design
-                time mismatches across shared zones, spacing limits, and
-                method-specific eligibility warnings—before you export.
-              </p>
-            </article>
-
-            <article className={styles.card}>
-              <h3>BOM, Import &amp; Export</h3>
-              <p>
-                Save and resume progress with{" "}
-                <strong>project import/export</strong>. Generate a polished
-                Excel workbook with a{" "}
-                <strong>grouped BOM by zone/enclosure</strong>, warnings, and
-                monitor/release points—<strong>with live price import</strong>.
+                Save and resume progress with project import/export for sharing
+                and collaboration. When error-free, submit your complete
+                configuration and BOM directly to Victaulic Customer Care for
+                technical review and quotation.
               </p>
             </article>
           </div>
         </section>
 
-        {/* ───────── ABOUT (dark) ───────── */}
+        {/* ───────── DESIGN WITH CONFIDENCE (dark) ───────── */}
         <section className={`${styles.section} ${styles.dark}`}>
-          <h2 className={styles.sectionHeading}>About the Tool</h2>
+          <h2 className={styles.sectionHeading}>Design with Confidence</h2>
           <div className={styles.split}>
             <div className={styles.splitCol}>
               <p>
                 The Victaulic Vortex Configurator unifies{" "}
                 <strong>engineered</strong> and <strong>pre-engineered</strong>{" "}
-                workflows into a single experience. Start a project, define{" "}
-                <strong>zones</strong> and enclosures, apply the appropriate
-                design method, and let the app guide emitter selection,
-                discharge timing, oxygen prediction, and panel requirements.
+                workflows into a single experience. Define zones and enclosures,
+                apply the appropriate design method, and let the configurator
+                guide nozzle selection, discharge timing, oxygen prediction, and
+                panel requirements.
               </p>
               <p>
                 Use <strong>Import/Export</strong> to save progress, clone
-                scenarios, or send configurations to Application Engineering for
-                support. Always reference the applicable Victaulic manuals,
-                codes/standards, and listings/approvals.
+                scenarios, or collaborate with Application Engineering for
+                support. Every output maps to specifications, ensuring your
+                design meets all applicable codes, standards, and approvals.
               </p>
             </div>
             <div className={styles.splitCol}>
-              <ul className={styles.bullets}>
-                <li>
-                  Supports NFPA&nbsp;770, FM Data Centers, and FM
-                  Turbines/Machine Spaces design methods, plus Pre-Engineered
-                </li>
-                <li>Nozzle &amp; style compatibility built in</li>
-                <li>Zone-based results at a glance</li>
-                <li>Panel sizing per zone (where applicable)</li>
-                <li>Oxygen prediction &amp; discharge time calculations</li>
-                <li>Water/tank and accessory add-ons where applicable</li>
-                <li>
-                  Validation: pressure/design mismatches &amp; spacing rules
-                </li>
-                <li>Excel export with pricing and grouped BOM</li>
-                <li>Import/Export projects to save, share, and get support</li>
-                <li>Optional pipe guidance for pre-engineered systems</li>
-              </ul>
+              <div className={styles.bulletColumns}>
+                <ul className={styles.bullets}>
+                  <li>NFPA 770 Class A/C and Class B</li>
+                  <li>FM Data Centers approval</li>
+                  <li>FM Turbines & Machine Spaces</li>
+                  <li>Pre-Engineered systems</li>
+                  <li>Zone-based results at a glance</li>
+                </ul>
+                <ul className={styles.bullets}>
+                  <li>Panel sizing per zone</li>
+                  <li>Oxygen & discharge time calcs</li>
+                  <li>Water tank & accessory add-ons</li>
+                  <li>Validation: pressures & spacing</li>
+                  <li>Pipe guidance for pre-engineered</li>
+                </ul>
+              </div>
             </div>
           </div>
         </section>
@@ -194,7 +184,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.1.0</div>
+          <div className={styles.footer}>v2.1.1</div>
         </section>
       </div>
     </>

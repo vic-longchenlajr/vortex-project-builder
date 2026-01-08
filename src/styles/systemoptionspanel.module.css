@@ -7,187 +7,359 @@
   padding: 12px;
   margin: 8px 0 12px;
   background: #fafbff;
+  display: contents;
 }
 
-.title {
-  display: block;
-  margin: 0 0 8px 0;
+/* Sticky layered system header (under page controls) */
+.stickyBar {
+  position: sticky;
+  top: var(--app-sticky-top, 64px);
+  z-index: 20;
+  backdrop-filter: saturate(120%) blur(2px);
+  background: color-mix(in srgb, #ffffff 82%, #eef2ff);
+  border: 1px solid #e5e8f1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+  box-shadow:
+    0 1px 1px rgba(16, 24, 40, 0.06),
+    0 2px 4px rgba(16, 24, 40, 0.06);
+}
+
+.stickyMain {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.sysTitle {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+.sysName {
+  font-weight: 700;
+  font-size: clamp(14px, 2vw, 16px);
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* System type pills */
+.sysType {
   font-weight: 600;
-  font-size: var(--fs-lg);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  display: inline-block;
+  margin-left: 6px;
+}
+.sysTypeEng {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #1e3a8a;
+}
+.sysTypePre {
+  background: rgba(14, 165, 161, 0.1);
+  border-color: rgba(14, 165, 161, 0.25);
+  color: #0f766e;
 }
 
-/* FORM CONTROLS */
-.control,
-.controlXS,
-.panel select,
-.panel input[type="number"],
-.panel input[type="text"] {
+/* KPI cluster */
+.sysKpis {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 10px;
+}
+.kpi {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.kpiLabel {
+  font-size: 11px;
+  color: #475569;
+  white-space: nowrap;
+}
+.kpiValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rounded numeric input – base theme used everywhere in this module */
+.kpiInput {
+  height: 24px;
+  padding: 2px 6px;
+  width: 7ch;
+  min-width: 56px;
+  text-align: right;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.kpiBtns {
+  display: inline-flex;
+  gap: 4px;
+}
+.kpiBtn {
+  border: 1px solid #e5e8f1;
+  background: #ffffff;
+  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  line-height: 20px;
+  text-align: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+.kpiBtn:hover {
+  background: #f8fafc;
+}
+
+/* FORM CONTROLS – system configuration selects/inputs */
+.inputControl {
+  width: 100%;
+  max-width: 220px;
   font-size: var(--fs-md);
   line-height: var(--lh-tight);
-  padding: 6px 8px;
+  padding: 4px 8px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  background: #fff;
   box-sizing: border-box;
 }
 
 /* SECTION HEADERS */
-.subhead {
-  font-size: var(--fs-md);
-  margin: 4px 0 6px;
+.rowHeading {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  margin-bottom: 6px;
 }
 
-/* ADD-ONS */
-.addons {
+/* High-level layout */
+.sysOptionsLayout {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
-.blockCheck {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-md);
+/* Each “row” section (options, add-ons, results) */
+.optionRow {
+  padding-top: 4px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+.optionRow:first-of-type {
+  border-top: none;
 }
 
-.checkRow {
+/* Row 1: system options laid out like cards */
+.optionGrid {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 12px;
 }
-
-.doorCount {
+.fieldBlock {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
+  flex-direction: column;
+  gap: 4px;
+}
+.fieldBlock label {
+  font-size: 12px;
+  color: #475569;
+}
+/* Estimates + results row */
+.rowResults {
+  margin-top: 2px;
+}
+.resultsPairGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: flex-start; /* align top */
 }
 
-/* ESTIMATES */
+/* Result column */
 .estimateCol {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
 }
 
-.estimateGroup {
-  display: grid;
-  gap: 6px;
-  border: 1px solid #e5e8f1;
-  background: #fff;
-  border-radius: 6px;
-  padding: 8px;
-}
-
-.editToggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-  font-size: var(--fs-md);
-}
-
-/* RESPONSIVE */
-@media (max-width: 1000px) {
-  .cols3 {
-    grid-template-columns: 1fr;
-  }
-  .colLeft {
-    grid-template-columns: 150px auto;
-  }
-}
-
-/* Normal controls cap width so they don't sprawl */
-.control {
-  width: 100%;
-  max-width: 360px;
-}
-
-/* Door Count + estimate inputs: ~2 digits wide */
-.controlXS,
-.estimateRow input[type="number"] {
-  /* was 5ch / 50px */
-  width: 7ch; /* ~3 digits + spinner comfortably */
-  min-width: 72px;
-  text-align: right; /* or left if you prefer */
-}
-
-/* Responsive */
-@media (max-width: 1080px) {
-  .cols3 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Make the first panel column narrower overall */
-.cols3 {
-  display: grid;
-  grid-template-columns: 0.9fr 1fr 1fr; /* was ~1.1–1.25fr for the first col */
-  gap: 12px 14px;
-  align-items: start;
-}
-
-/* Left column: tighter control track */
-.colLeft {
-  display: grid;
-  grid-template-columns: max-content minmax(150px, 220px); /* was up to 280–360px */
-  gap: 8px 8px;
-  align-items: center;
-}
-.colLeft label {
-  white-space: nowrap;
-}
-
-/* Default controls: slimmer cap */
-.control {
-  width: 100%;
-  max-width: 220px; /* was 280–500px */
-}
-
-/* Keep estimate label one line; tiny input on right */
-.estimateRow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-  white-space: nowrap;
-}
 .muted {
   color: #667085;
 }
-.mutedSm {
-  color: #667085;
-  font-size: 0.85em;
+
+/* Shared results table styling – local to SystemOptionsPanel */
+.resultsTable {
+  width: 100%;
+  border: 1px solid #e3e6ef;
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  font-size: 13px;
+  overflow: hidden;
+  table-layout: auto;
+  box-shadow:
+    0 1px 1px rgba(15, 23, 42, 0.04),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.resultsTable thead th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e3e6ef;
+  white-space: nowrap;
+}
+.resultsTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f2f8;
+}
+.resultsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+.resultsTable tbody tr:nth-child(even) {
+  background: #fbfcff;
 }
 
-/* Estimated Values: compact look like Zone Results */
+/* Key-value cells */
+.kvLabel {
+  color: #475569;
+  white-space: nowrap;
+}
+.kvValue {
+  font-weight: 400;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Estimated Values – slightly tighter cells */
 .estTable td {
-  /* tighter row padding */
   padding: 4px 8px;
 }
 .estTable thead th {
-  padding: 6px 8px; /* keep header comfortable */
+  padding: 6px 8px;
 }
 
+/* Checkbox + input controls inline */
 .estControls {
-  /* checkbox + number inline, right-aligned */
   display: inline-flex;
   align-items: center;
   gap: 6px;
   justify-content: flex-end;
   width: 100%;
 }
-
-.estInput {
-  /* shorter numeric input */
-  height: 24px; /* ~Zone Results control height */
-  padding: 2px 6px;
-  font-size: 12px;
-  line-height: 1.2;
-  width: 7ch; /* keep your XS width */
-  min-width: 64px;
-  text-align: right;
-}
-
-/* optional: smaller checkbox to visually match */
 .estControls input[type="checkbox"] {
   transform: scale(0.95);
+}
+
+.addonsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.addonCol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.addonCheck {
+  display: inline-flex;
+  align-items: flex-start; /* align from top by checkbox */
+  gap: 8px;
+  white-space: nowrap; /* no wrapping */
+  line-height: 1.2;
+}
+
+.addonLabelText {
+  white-space: nowrap; /* no wrapping */
+}
+
+.addonLink {
+  white-space: nowrap; /* no wrapping */
+  text-decoration: underline;
+}
+
+.addonInlineField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.addonInlineLabel {
+  font-size: 12px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.addonInlineInput {
+  width: 25%;
+  font-size: var(--fs-md);
+  line-height: var(--lh-tight);
+  padding: 4px 8px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.addonInlineSelect {
+  width: 100%;
+  font-size: var(--fs-md);
+  line-height: var(--lh-tight);
+  padding: 4px 8px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.addonCheck input[type="checkbox"] {
+  margin-top: 1px; /* tiny baseline nudge */
+}
+.addonLabelText,
+.addonLink {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+@media (max-width: 1100px) {
+  .addonsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .addonsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* RESPONSIVE */
+@media (max-width: 1080px) {
+  .stickyMain {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .sysKpis {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, max-content);
+  }
 }

@@ -4,6 +4,8 @@ import type {
   Zone,
   Enclosure,
   EngineeredOptions,
+  WaterTankCert,
+  PreEngineeredOptions,
 } from "@/state/app-model";
 import { resolveEmitterSpec } from "@/core/catalog/emitter.catalog";
 import {
@@ -25,7 +27,6 @@ import {
   __refill_bulk,
   __flexible_hose,
   __braided_hose_36,
-  __adapter_elbow,
   __n2_relief_valve,
   __tank_regulator_nor,
   __tank_regulator_hc,
@@ -61,18 +62,21 @@ import {
   __pre_6cyl,
   __pre_7cyl,
   __pre_8cyl,
-  __adapter_straight,
   __vortex_data_proc_pe,
   __preeng_iom_manual,
-  __12_low_pressure_n2_switch, // ← ADD THIS
+  __12_low_pressure_n2_switch,
+  __tamper_resistance_kit, // ← ADD THIS
   type Codes,
 } from "@/core/catalog/parts.constants";
 import type { BomMap, BomLine, EngineeredBomBySystem } from "./types";
+import {
+  buildPreEngSystemPartcodeFromConfig,
+  formatSystemPartCode, // if you want to keep any direct usage
+} from "@/core/calc/preengineered/partcode";
 
 // NEW: strict water-tank selector (exact cert match)
 import {
   selectWaterTankStrict,
-  type WaterTankCert,
   TANKS,
 } from "@/core/catalog/water_tanks.catalog";
 
@@ -197,7 +201,17 @@ const BATTERY_POINTS = [
 const DISCHARGE_VERIF_POINTS = [
   { type: P_MON_ALM, description: "Discharge Verification" },
 ] as const;
+function getTankPickFromOptions(opts: { waterTankPick?: Codes | null }) {
+  const pick = opts.waterTankPick ?? null;
+  return pick && Array.isArray(pick) && pick[0] ? pick : null;
+}
 
+function getTankReqFromOptions(opts: {
+  waterTankRequired_gal?: number | null;
+}) {
+  const n = Number(opts.waterTankRequired_gal);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 export function facpPointsFor(
   partcode: string,
   alt?: string
@@ -310,7 +324,6 @@ export function collectBOM(project: Project): EngineeredBomBySystem {
   for (const [k, v] of Object.entries(pre)) merged[k] = v;
   return merged;
 }
-
 // ─────────────────────────────────────────────────────────────
 // PRE-ENGINEERED COLLECTOR (single zone, single enclosure)
 // Reuses the same Map/add/scoping + emitter signage rules,
@@ -321,29 +334,11 @@ export function collectPreEngineeredBOM(
   project: Project
 ): EngineeredBomBySystem {
   const out: EngineeredBomBySystem = {};
-  let systemPartCode = [
-    "S", // [0] product class
-    "", // [1] cylinder size
-    "", // [2] number of cylinders
-    "", // [3] refill adapter
-    "9", // [4] product
-    "P", // [5]
-    "E", // [6]
-    "", // [7] hazard
-    "", // [8] orifice
-    "", // [9] number of emitters
-    "", // [10] emitter style
-    "", // [11] water tank type
-    "", // [12] power supply
-    "", // [13] transducer type
-    "", // [14] bulk refill adapter
-  ];
 
   for (const sys of project.systems) {
     if (sys.type !== "preengineered") continue;
-
     const bom: BomMap = new Map();
-    const opts = sys.options as any; // PreEngineeredOptions
+    const opts = sys.options as PreEngineeredOptions;
     const zones = sys.zones || [];
     if (!zones.length) {
       out[sys.id] = { systemName: sys.name, bom };
@@ -372,14 +367,11 @@ export function collectPreEngineeredBOM(
         );
         add(bom, __pilot_primary_80L, 1, "supply");
         add(bom, __pilot_secondary_80L, cylCount - 1, "supply");
-        systemPartCode[1] = "8";
       } else {
         add(bom, __49L_cylinder_n2, cylCount, "supply");
         add(bom, __pilot_primary_49L, 1, "supply");
         add(bom, __pilot_secondary_49L, cylCount - 1, "supply");
-        systemPartCode[1] = "4";
       }
-      systemPartCode[2] = cylCount.toString();
     }
     let subassembly: Codes | null = null;
     switch (cylCount) {
@@ -438,30 +430,13 @@ export function collectPreEngineeredBOM(
           enclosureName: enc.name,
         });
       }
-      systemPartCode[8] = spec.pe_code;
-      systemPartCode[9] = nEmitters.toString();
-      if (style == "standard-stainless") {
-        systemPartCode[10] = "S";
-      } else if (style == "escutcheon-stainless") {
-        systemPartCode[10] = "E";
-      } else if (style == "standard-pvdf") {
-        systemPartCode[10] = "P";
-      }
     }
     //============================================REFILL ADAPTER============================================//
     if (opts.refillAdapter === "CGA-580") {
       add(bom, __refill_cga580, cylCount, "supply");
-      systemPartCode[3] = "1";
     } else if (opts.refillAdapter === "CGA-677") {
       add(bom, __refill_cga677, cylCount, "supply");
-      systemPartCode[3] = "2";
     }
-    add(bom, __adapter_straight, nEmitters * 2, {
-      zoneId: zone.id,
-      zoneName: zone.name,
-      enclosureId: enc.id,
-      enclosureName: enc.name,
-    });
     add(bom, __braided_hose_36, nEmitters, {
       zoneId: zone.id,
       zoneName: zone.name,
@@ -470,46 +445,29 @@ export function collectPreEngineeredBOM(
     });
     if (opts.addOns.bulkRefillAdapter) {
       add(bom, __refill_bulk, 1, "supply");
-      systemPartCode[14] = "1";
     } else {
-      systemPartCode[14] = "0";
     }
     // ============================================WATER TANK============================================ //
-    const reqGal = Math.ceil(Number((zone as any).waterTankMin_gal) || 0);
-    if (reqGal > 0) {
-      const optsAny = sys.options as any;
+    add(bom, __tamper_resistance_kit, 1, "supply");
+    const reqGal =
+      Math.ceil(getTankReqFromOptions(opts)) ||
+      Math.ceil(Number((zone as any).waterTankMin_gal) || 0);
+    const pickFromCalc = getTankPickFromOptions(opts);
 
-      // 1) Prefer calc-layer decision (from pre-eng calcSystem we added earlier)
-      const pickFromCalc: {
-        codes: [string, string];
-        description: string;
-        cert: WaterTankCert;
-      } | null = optsAny.waterTankPick ?? null;
-
-      if (pickFromCalc && Array.isArray(pickFromCalc.codes)) {
-        add(bom, pickFromCalc.codes, 1, "supply");
-        systemPartCode[11] = (pickFromCalc as any).pe_code ?? ""; // if your catalog exposes it
-      } else {
-        // 2) Fallback: compute here using exact cert + req capacity
-        const uiCert = resolveTankCertFromOptions(sys);
-        if (uiCert) {
-          const chosen = selectWaterTankStrict(uiCert, reqGal);
-          if (chosen?.codes) {
-            add(bom, chosen.codes, 1, "supply");
-            systemPartCode[11] = chosen.pe_code ?? "";
-          } else {
-            systemPartCode[11] = "-"; // no fit (calc layer can issue warning)
-          }
-        }
+    if (pickFromCalc) {
+      add(bom, pickFromCalc, 1, "supply");
+    } else {
+      const cert = opts.waterTankCertification;
+      if (cert && reqGal > 0) {
+        const chosen = selectWaterTankStrict(cert, reqGal);
+        if (chosen?.codes) add(bom, chosen.codes, 1, "supply");
       }
     }
     //============================================POWER SUPPLY============================================//
     if (opts.powerSupply === "120") {
       add(bom, __backup_bat_115, 1, "supply");
-      systemPartCode[12] = "1";
     } else if (opts.powerSupply === "240") {
       add(bom, __backup_bat_220, 1, "supply");
-      systemPartCode[12] = "2";
     }
     //============================================TRANSDUCER TYPE============================================//
     if (opts.addOns?.expProofTransducer) {
@@ -519,7 +477,6 @@ export function collectPreEngineeredBOM(
         enclosureId: enc.id,
         enclosureName: enc.name,
       });
-      systemPartCode[13] = "E";
     } else {
       add(bom, __transducer_nor, 1, {
         zoneId: zone.id,
@@ -527,7 +484,6 @@ export function collectPreEngineeredBOM(
         enclosureId: enc.id,
         enclosureName: enc.name,
       });
-      systemPartCode[13] = "S";
     }
     //============================================LABELS============================================//
     add(bom, __warning_inside, 3, "supply");
@@ -551,8 +507,14 @@ export function collectPreEngineeredBOM(
     }
     add(bom, designLabel, 1, "supply");
     add(bom, __placard_rack, 1, "supply");
-    systemPartCode[7] = hazardCode;
-    out[sys.id] = { systemName: sys.name, bom };
+    const pc = buildPreEngSystemPartcodeFromConfig(project, sys);
+    const formatted = pc?.formatted ?? "";
+
+    out[sys.id] = {
+      systemName: sys.name,
+      bom,
+      systemPartCode: formatted, // formatted “S-xxx-9PE-xxx-xxx-xx”
+    };
   }
   return out;
 }
@@ -600,6 +562,7 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
     if (opts.addOns.igsFlexibleHose48) {
       add(bom, __flexible_hose, 1, "supply");
     }
+    add(bom, __tamper_resistance_kit, 1, "supply");
 
     // Per zone/enclosure
     let waterRates: number[] = [];
@@ -627,49 +590,11 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
 
       // Enclosures
       for (const enc of zone.enclosures) {
-        let straightQty = 0;
         let braidedQty = 0;
-        let elbowQty = 0;
 
         // 1) Signage / placards
-        if (
-          enc.method === "NFPA 770 Class A/C" ||
-          enc.method === "NFPA 770 Class B" ||
-          enc.method === "FM Data Centers"
-        ) {
-          if (
-            o2StringToDecimal(enc.estFinalO2) != null &&
-            o2StringToDecimal(enc.estFinalO2)! < 10
-          ) {
-            add(bom, __placard_int_zone, opts.addOns.doorCount, {
-              zoneId: zone.id,
-              zoneName: zone.name,
-              enclosureId: enc.id,
-              enclosureName: enc.name,
-            });
-            add(bom, __placard_ext_zone, opts.addOns.doorCount, {
-              zoneId: zone.id,
-              zoneName: zone.name,
-              enclosureId: enc.id,
-              enclosureName: enc.name,
-            });
-          } else {
-            add(bom, __warning_inside, opts.addOns.doorCount, {
-              zoneId: zone.id,
-              zoneName: zone.name,
-              enclosureId: enc.id,
-              enclosureName: enc.name,
-            });
-            add(bom, __warning_outside, opts.addOns.doorCount, {
-              zoneId: zone.id,
-              zoneName: zone.name,
-              enclosureId: enc.id,
-              enclosureName: enc.name,
-            });
-          }
-          straightQty = (enc.minEmitters ?? 0) * 2;
-          braidedQty = enc.minEmitters ?? 0;
-        } else {
+
+        if (enc.method === "FM Machine Spaces") {
           add(bom, __placard_int_zone, opts.addOns.doorCount, {
             zoneId: zone.id,
             zoneName: zone.name,
@@ -682,25 +607,24 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
             enclosureId: enc.id,
             enclosureName: enc.name,
           });
-          straightQty = enc.minEmitters ?? 0;
           braidedQty = enc.minEmitters ?? 0;
-          elbowQty = enc.minEmitters ?? 0;
+        } else {
+          add(bom, __warning_inside, opts.addOns.doorCount, {
+            zoneId: zone.id,
+            zoneName: zone.name,
+            enclosureId: enc.id,
+            enclosureName: enc.name,
+          });
+          add(bom, __warning_outside, opts.addOns.doorCount, {
+            zoneId: zone.id,
+            zoneName: zone.name,
+            enclosureId: enc.id,
+            enclosureName: enc.name,
+          });
+          braidedQty = enc.minEmitters ?? 0;
         }
-
-        if (opts.addOns.waterFlexLine) {
-          add(bom, __adapter_straight, straightQty, {
-            zoneId: zone.id,
-            zoneName: zone.name,
-            enclosureId: enc.id,
-            enclosureName: enc.name,
-          });
+        if (enc.emitterStyle != "standard-pvdf") {
           add(bom, __braided_hose_36, braidedQty, {
-            zoneId: zone.id,
-            zoneName: zone.name,
-            enclosureId: enc.id,
-            enclosureName: enc.name,
-          });
-          add(bom, __adapter_elbow, elbowQty, {
             zoneId: zone.id,
             zoneName: zone.name,
             enclosureId: enc.id,
@@ -814,30 +738,24 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
     // Prefer the selection produced by the calc layer (opts.waterTankPick).
     // If absent, compute it here once using the exact cert + max zone requirement.
     // ─────────────────────────────────────────────────────────────
-    const optsAny = sys.options as any;
-    const pickFromCalc: {
-      codes: [string, string];
-      description: string;
-      cert: WaterTankCert;
-    } | null = optsAny.waterTankPick ?? null;
-
-    if (pickFromCalc && Array.isArray(pickFromCalc.codes)) {
-      add(bom, pickFromCalc.codes, 1, "supply");
-    } else {
-      const uiCert = resolveTankCertFromOptions(sys); // exact cert from options (legacy-safe)
-      const maxZoneReqGal = Math.max(
-        0,
-        ...sys.zones.map((z) => Number((z as any).waterTankMin_gal) || 0)
+    const reqGal =
+      Math.ceil(getTankReqFromOptions(opts)) ||
+      Math.ceil(
+        Math.max(
+          0,
+          ...sys.zones.map((z) => Number((z as any).waterTankMin_gal) || 0)
+        )
       );
 
-      if (uiCert && maxZoneReqGal > 0) {
-        const chosen = selectWaterTankStrict(uiCert, maxZoneReqGal);
-        if (chosen?.codes) {
-          add(bom, chosen.codes, 1, "supply");
-        } else {
-          // No fit → warn only (engineered calc already pushes a SYS.TANK_CAPACITY warning)
-          /* no-op */
-        }
+    const pickFromCalc = getTankPickFromOptions(opts);
+
+    if (pickFromCalc) {
+      add(bom, pickFromCalc, 1, "supply");
+    } else {
+      const cert = opts.waterTankCertification; // WaterTankCert | undefined
+      if (cert && reqGal > 0) {
+        const chosen = selectWaterTankStrict(cert, reqGal);
+        if (chosen?.codes) add(bom, chosen.codes, 1, "supply");
       }
     }
     // ─────────────────────────────────────────────────────────────
@@ -962,31 +880,4 @@ export function numberStringToValue(input: unknown): number | null {
   }
   const n = Number(tok);
   return Number.isFinite(n) ? n : null;
-}
-
-type UiTankCert = "ASME/FM" | "CE/ASME/FM" | "CE";
-
-function resolveTankCertFromOptions(
-  sys: System
-): import("@/core/catalog/water_tanks.catalog").WaterTankCert | null {
-  const o: any = sys.options;
-
-  // NEW: honor the modern field written by SystemOptionsPanel
-  const certNew:
-    | import("@/core/catalog/water_tanks.catalog").WaterTankCert
-    | undefined = o.waterTankCertification;
-  if (certNew) return certNew;
-
-  // Legacy fallback (old projects): map string to catalog cert
-  const legacy: UiTankCert | undefined = o.waterTank;
-  switch (legacy) {
-    case "ASME/FM":
-      return "US_ASME_FM";
-    case "CE/ASME/FM":
-      return "US_ASME_CE_FM";
-    case "CE":
-      return "CE_SS316L";
-    default:
-      return null;
-  }
 }

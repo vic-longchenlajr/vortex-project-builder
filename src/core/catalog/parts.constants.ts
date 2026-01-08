@@ -11,7 +11,7 @@ const pc = (bpcs: string, m3: string): Codes => [bpcs, m3] as const;
 
 // transducers
 export const __transducer_exp: Codes = pc("P000951TRM", "D09510000VXTRVP");
-export const __transducer_nor: Codes = pc("P000951134", "D09510000VXPT0D");
+export const __transducer_nor: Codes = pc("P000951140", "D09510000VXST00");
 
 // release valves
 export const __pilot_primary_80L: Codes = pc("S0009500PP", "D09500000VXPPK0");
@@ -51,7 +51,7 @@ export const __flexible_hose: Codes = pc("A480AQBH2V", "AGH1C0480ZZBIFV");
 // emitter options
 export const __1_emitter_dom_es: Codes = pc("S010953511", "D09530010VXE0DF");
 export const __1_emitter_dom_ss: Codes = pc("S010953501", "D09530010VXESDF");
-export const __58_emitter_cav_ss: Codes = pc("S005953006", "D09540005VXESDF");
+export const __58_emitter_cav_ss: Codes = pc("S005953006", "D09540005VXE0CF");
 export const __58_emitter_cav_sp: Codes = pc("S006953503", "D09530005VXCVE0");
 export const __58_emitter_cav_es: Codes = pc("S006953512", "D09530005VXE0CF");
 export const __38_emitter_cav_ss: Codes = pc("S003953001", "D09540003VXE0CF");
@@ -60,6 +60,11 @@ export const __12_emitter_dom_ss: Codes = pc("S000953510", "D09530004VXEXDF");
 export const __12_emitter_dom_sp: Codes = pc("S006953406", "D09530006VXE0N0");
 export const __12_emitter_dom_es: Codes = pc("S004953511", "D09530004VXE0D4");
 export const __12_emitter_dom_br: Codes = pc("S006953400", "D09530006VXE0B0");
+// replace the previous with this one in FMT and FMMS once current stock is depleted.
+// export const __12_emitter_dom_ss_fm: Codes = pc(
+//   "S006953X40",
+//   "D09530006VXE0XX"
+// );
 export const __38_emitter_dom_ss: Codes = pc("S003953X02", "D09530003VXESFF");
 export const __38_emitter_dom_es: Codes = pc("S003953032", "D09530003VXE0DF");
 export const __14_emitter_dom_ss: Codes = pc("S002953X4F", "D09530002VXESDF");
@@ -69,14 +74,14 @@ export const __18_emitter_dom_ss: Codes = pc("S00195310X", "D09530000VXE0TX");
 export const __18_emitter_cav_sp: Codes = pc("S003953105", "D09530000VXE0NM");
 
 // flow cartridges
-export const __flow_cartridge_13: Codes = pc("K000953X13", "D09530006VXWCX3");
-export const __flow_cartridge_26: Codes = pc("K000953X26", "D09530006VXWCX4");
-export const __flow_cartridge_53: Codes = pc("K000953X53", "D09530006VXWCX5");
-export const __flow_cartridge_79: Codes = pc("K000953X79", "D09530006VXWCX7");
-export const __flow_cartridge_106: Codes = pc("K000953X06", "D09530006VXWCX6");
-export const __flow_cartridge_159: Codes = pc("K00095315X", "K09530006VXWCX9");
-export const __flow_cartridge_211: Codes = pc("K000953X11", "K09530006VXWCX1");
-export const __flow_cartridge_423: Codes = pc("K000953X23", "K09530006VXWCX3");
+export const __flow_cartridge_13: Codes = pc("K000953013", "D09530006VXWCB3");
+export const __flow_cartridge_26: Codes = pc("K000953026", "D09530006VXWCB4");
+export const __flow_cartridge_53: Codes = pc("K000953053", "D09530006VXWCB5");
+export const __flow_cartridge_79: Codes = pc("K000953079", "D09530006VXWCB7");
+export const __flow_cartridge_106: Codes = pc("K000953106", "D09530006VXWCB6");
+export const __flow_cartridge_159: Codes = pc("K000953153", "K09530006VXWCB9");
+export const __flow_cartridge_211: Codes = pc("K000953211", "K09530006VXWCB1");
+export const __flow_cartridge_423: Codes = pc("K000953423", "K09530006VXWCB3");
 
 export const __tamper_resistance_kit: Codes = pc(
   "K000950WTR",
@@ -84,9 +89,7 @@ export const __tamper_resistance_kit: Codes = pc(
 );
 
 // add-ons
-export const __adapter_straight: Codes = pc("PAY7000C01", "D09550002VXMFBA");
 export const __braided_hose_36: Codes = pc("P360955228", "D09550360VXJICX");
-export const __adapter_elbow: Codes = pc("PAY0955001", "D09550000VXBSEN");
 
 // cylinder racks
 export const __cylinder_rack_1_2: Codes = pc("K800950002", "D09500000VX8WM8");

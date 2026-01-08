@@ -1,7 +1,7 @@
 // src/core/bom/priceList.ts
 import ExcelJS from "exceljs";
 import type { PriceIndex, PriceRow } from "./types";
-import { loadPriceListBytes } from "./priceList.loader";
+import { loadPriceListBytes } from "@/core/bom/priceList.localloader";
 
 const DEFAULT_SHEET = "Configurator";
 const DEFAULT_URL =
@@ -14,7 +14,7 @@ function coerceNumber(x: unknown): number {
 }
 
 export async function fetchPriceIndex(url = DEFAULT_URL): Promise<PriceIndex> {
-  const bytes = await loadPriceListBytes(url);
+  const bytes = await loadPriceListBytes();
 
   const wb = new ExcelJS.Workbook();
   const tightAb: ArrayBuffer = bytes.slice(0).buffer; // guaranteed ArrayBuffer

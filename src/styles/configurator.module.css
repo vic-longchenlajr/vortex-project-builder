@@ -1,12 +1,12 @@
-/* ============ Layout ============ */
+/* =========================================================
+   TOKENS
+   ========================================================= */
 .container {
   padding: 24px;
-
-  /* design tokens (scoped for CSS Modules purity) */
+  /* brand + colors */
   --brand-accent: #ff6900;
-
-  --sys-eng: #2563eb; /* blue */
-  --sys-pre: #0ea5a1; /* teal */
+  --sys-eng: #2563eb;
+  --sys-pre: #0ea5a1;
   --sys-eng-tint: #e8f0ff;
   --sys-pre-tint: #e6fffb;
 
@@ -23,57 +23,164 @@
   --shadow-1:
     0 1px 2px rgba(16, 24, 40, 0.08), 0 1px 1px rgba(16, 24, 40, 0.06);
   --ring: 0 0 0 3px rgba(241, 90, 34, 0.2);
+
+  /* side column widths (visual) */
+  --left-col-open: 250px; /* ↑ was 250px, give Project Options more space */
+  --right-col-open: 250px; /* was 300, now closer to left for balance */
+
+  /* previously used to create "pop out" edges; now neutral */
+  --edge-left: 0px;
+  --edge-right: 0px;
+
+  --panel-edge-expose: 15px;
+  --handle-expose: 10px;
+  --grid-gap: 20px;
+  overflow-x: clip;
+  --app-sticky-top: calc(
+    var(--nav-height, 100px) + var(--mid-sticky-height, 47px)
+  );
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.nav {
-  display: flex;
-  gap: 12px;
-}
-
+/* ====== GRID ====== */
 .grid {
   display: grid;
-  grid-template-columns: 200px minmax(640px, 1fr) 220px;
-  gap: 24px;
+  grid-template-columns:
+    var(--left-col-open) /* LEFT */
+    minmax(700px, 1fr) /* MIDDLE */
+    var(--right-col-open); /* RIGHT */
+  gap: var(--grid-gap);
   align-items: start;
+}
+
+/* when sidebar collapsed, left col becomes just the handle strip */
+.container[data-sidebar-open="0"] .grid {
+  grid-template-columns:
+    calc(var(--panel-edge-expose) + var(--handle-expose))
+    minmax(760px, 1fr)
+    var(--right-col-open);
 }
 
 .sticky {
   position: sticky;
-  top: 20px;
-}
-.leftCol {
-  position: sticky;
-  bottom: 20px; /* gap from viewport bottom */
-  align-self: start; /* ensure sticky works inside the grid */
-}
-.rightCol {
-  position: sticky;
-  top: calc(var(--nav-height, 56px) + 40px);
-  align-self: start; /* ensures sticky works inside CSS grid */
-  max-height: calc(100vh - 16px);
-  overflow-y: auto; /* right column contents can scroll independently */
 }
 
-/* ============ Cards / sections ============ */
+/* LEFT column */
+.leftCol {
+  position: sticky;
+  top: calc(var(--nav-height, 56px) + 24px);
+  align-self: start;
+  /* REMOVE negative translate; we want the Project Options to align to the grid */
+  transform: none;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+  overflow: visible;
+}
+
+/* collapsed: keep clicks only on the handle & hide content */
+.container[data-sidebar-open="0"] .leftCol {
+  overflow: visible;
+  pointer-events: none;
+}
+.container[data-sidebar-open="0"] .leftCol > :not(.leftColHandle) {
+  display: none !important;
+}
+.container[data-sidebar-open="0"] .leftColHandle {
+  pointer-events: auto;
+  right: 4px;
+  z-index: 10;
+}
+
+/* RIGHT column */
+.rightCol {
+  --sticky-offset: calc(var(--nav-height, 56px) + 24px);
+  position: sticky;
+  top: var(--sticky-offset);
+
+  height: calc(100vh - var(--sticky-offset));
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+
+  /* REMOVE the old “pop out” translate – we want even left/right margins */
+  transform: none;
+
+  /* give a little internal padding so cards don’t touch the grid edge */
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* =========================================================
+   LEFT/RIGHT PANEL EDGE TREATMENT
+   - Make side cards align visually with middle cards, no extra offset
+   ========================================================= */
+.leftCol .section,
+.rightCol .section {
+  /* rely mostly on the base .section padding;
+     add a tiny tweak so they feel centered in their columns */
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* When collapsed, show just a thin stripe in the left column so users
+   notice the hidden Project Options */
+.container[data-sidebar-open="0"] .leftCol .section {
+  padding-left: 8px;
+  border-left: none;
+  box-shadow: inset 3px 0 0 var(--sys-eng);
+}
+
+/* =========================================================
+   LEFT PANEL TOGGLE HANDLE
+   ========================================================= */
+.leftColHandle {
+  position: absolute;
+  top: var(--sidebar-handle-top);
+  right: -10px; /* slightly outside when OPEN */
+  z-index: 3;
+  height: 32px;
+  width: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--line-1);
+  background: #fff;
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition:
+    transform 120ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+.leftColHandle:hover,
+.leftColHandle:focus-visible {
+  transform: scale(1.04);
+}
+
+/* keep the handle fully inside the narrow exposed strip when COLLAPSED */
+.container[data-sidebar-open="0"] .leftColHandle {
+  right: 4px;
+}
+
+/* =========================================================
+   CARDS / SECTIONS
+   ========================================================= */
 .section {
   border: 1px solid #e3e6ef;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px;
   background: #fff;
   margin-bottom: 16px;
   box-shadow: var(--shadow-1);
 }
 
+/* Pricing panel */
 .priceCard {
-  display: grid;
-  gap: 8px;
+  flex: 0 0 auto;
 }
+
 .priceRow {
   display: flex;
   justify-content: space-between;
@@ -86,21 +193,40 @@
   font-weight: 700;
 }
 
+/* Page title */
 .builderTitle {
   margin: 0 0 12px;
   font-size: var(--fs-xl);
 }
-.addBar {
-  display: flex;
-  gap: 8px;
+
+/* Control bar */
+.controlBar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: var(--shadow-1);
   margin-bottom: 12px;
 }
+.controlGroupPrimary,
+.controlGroupSecondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.controlGroupSecondary {
+  justify-content: flex-end;
+}
 
-/* Project Options */
+/* Project options inputs */
 .poGrid {
   display: grid;
   grid-template-columns: 1fr;
-  row-gap: 10px;
+  row-gap: 5px;
 }
 .poLabel {
   font-size: var(--fs-sm);
@@ -112,22 +238,28 @@
 }
 .poControl {
   width: 100%;
+  max-width: 240px; /* slightly wider thanks to the larger left column */
   font-size: var(--fs-md);
   line-height: var(--lh-tight);
-  padding: 6px 8px;
+  padding: 4px 8px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  background: #fff;
   box-sizing: border-box;
 }
 
-/* ============ System & Zone ============ */
+/* =========================================================
+   SYSTEM & ZONE CARDS
+   ========================================================= */
 .sysCard {
   border: 1px solid #e3e6ef;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px;
   margin-bottom: 16px;
   background: #fff;
   border-left: 6px solid transparent;
   box-shadow: var(--shadow-1);
-  overflow: hidden;
+  overflow: visible;
 }
 .sysCard--eng {
   border-left-color: var(--sys-eng);
@@ -136,7 +268,6 @@
   border-left-color: var(--sys-pre);
 }
 
-/* Slim header band + badge */
 .sysHeader {
   height: 6px;
   margin: -12px -12px 12px -12px;
@@ -150,7 +281,7 @@
   font-size: 11px;
   line-height: 1;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 10px;
   border: 1px solid var(--line-1);
   background: #fff;
   box-shadow: var(--shadow-1);
@@ -180,7 +311,7 @@
 
 .zoneCard {
   border: 1px solid var(--line-1);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px;
   margin: 12px 0;
   background: #fff;
@@ -191,8 +322,6 @@
   align-items: center;
   margin-bottom: 6px;
 }
-
-/* Quick zone metrics */
 .zoneMeta {
   display: flex;
   gap: 8px;
@@ -217,8 +346,6 @@
   color: var(--ink-2);
   margin: 8px 0 6px;
 }
-
-/* Tinted section helpers */
 .section--muted {
   background: var(--surface-muted);
 }
@@ -229,30 +356,14 @@
   background: var(--surface-ok);
 }
 
-/* Status console helpers (if your StatusConsole needs them) */
-.statusCard {
-  display: grid;
-  gap: 8px;
-}
-.statusHeader {
-  margin: 0;
-}
-.console {
-  background: #0b1220;
-  color: #e5e7eb;
-  border-radius: 6px;
-  padding: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  min-height: 96px;
-}
-
-/* ============ Tables ============ */
+/* =========================================================
+   TABLES
+   ========================================================= */
 .enclosureTableWrap {
   max-width: 100%;
   overflow-x: auto;
 }
+
 .enclosureTable {
   width: 100%;
   border-collapse: separate;
@@ -279,22 +390,12 @@
   white-space: nowrap;
   backdrop-filter: saturate(120%) blur(2px);
 }
-.enclosureTable thead th:nth-child(2) {
-  text-align: left;
-}
 .enclosureTable tbody td {
   padding: 6px 8px;
   border-bottom: 1px solid #f0f2f8;
   vertical-align: middle;
 }
-.encIndexCell,
-.enclosureTable thead th:first-child,
-.enclosureTable tbody td:first-child {
-  width: 40px;
-  text-align: center;
-  white-space: nowrap;
-}
-.enclosureTable thead th:last-child,
+
 .enclosureTable tbody td:last-child {
   width: 48px;
   text-align: center;
@@ -305,30 +406,55 @@
 .enclosureTable button {
   font-size: 13px;
   line-height: 1.2;
-  padding: 4px 6px;
-  height: 32px;
+  border: 1px solid #e5e8f1;
+  height: 24px;
   box-sizing: border-box;
+}
+
+.controlsRow .inputMd {
+  width: 200px;
+}
+
+.zoneHeader .inputMd {
+  width: 100px;
 }
 
 .enclosureTable td:nth-child(2) input[type="text"],
 .inputMd {
-  width: 160px;
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: left;
+  width: 160;
 }
-.enclosureTable .inputSm {
+.inputSm {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: left;
   width: 84px;
-  text-align: right;
 }
-.enclosureTable .inputXs {
+.inputXs {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: left;
   width: 53px;
-  text-align: right;
-}
-.styleSelect {
-  min-width: 140px;
-  max-width: 160px;
-}
-.nozzleSelect {
-  min-width: 230px;
-  max-width: 280px;
 }
 .enclosureTable td select {
   max-width: 260px;
@@ -345,14 +471,12 @@
   min-width: 0;
 }
 
-/* Results Grid + Table */
 .resultsGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr; /* two columns on larger screens */
   gap: 12px;
   align-items: start;
 }
-
 .resultsTable {
   width: 100%;
   border: 1px solid #e3e6ef;
@@ -400,8 +524,12 @@
 .kvValue {
   font-variant-numeric: tabular-nums;
 }
-
-/* Key/Value rows */
+.kvRowRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
 .kvLabel {
   white-space: nowrap;
 }
@@ -410,7 +538,7 @@
   text-align: right;
 }
 
-/* PRE-ENGINEERED table specifics */
+/* Pre-engineered specifics */
 .preTable thead th {
   text-align: left;
 }
@@ -452,30 +580,40 @@
   font-size: 11px;
 }
 .dimInput {
-  width: 58px;
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
   text-align: right;
-  padding: 3px 6px;
-  height: 26px;
+  width: 58px;
 }
 
-.preTable .preNozzleSelect,
-.preTable .preStyleSelect {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-}
-.preTable thead th:nth-child(7) {
-  text-align: left;
-}
-
-/* Select + pill inline helper */
+/* Select + pill helper */
 .selectWithPill {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* ============ Buttons ============ */
+.inputControl {
+  width: 100%;
+  max-width: 220px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-tight);
+  padding: 4px 8px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
 .btn {
   --btn-bg: #fff;
   --btn-fg: var(--ink-3);
@@ -527,10 +665,13 @@
   color: #fff;
 }
 .btnPrimary:hover {
-  filter: brightness(0.96);
+  color: var(--brand-accent);
+  border-color: var(--line-1);
+
+  --btn-bg: grey;
+  --btn-bd: transparent;
 }
 
-/* very light tinted buttons for secondary actions */
 .btnSoft {
   background: #f8fafc;
   border-color: var(--line-1);
@@ -539,7 +680,6 @@
   background: #f3f5f8;
 }
 
-/* contextual soft tints for add-system buttons */
 .btnSoftEng {
   background: rgba(37, 99, 235, 0.08);
   border-color: rgba(37, 99, 235, 0.25);
@@ -558,7 +698,6 @@
   background: rgba(14, 165, 161, 0.14);
 }
 
-/* destructive */
 .btnDanger {
   --btn-bg: #fff1f2;
   --btn-fg: #b91c1c;
@@ -568,7 +707,6 @@
   background: #ffe4e6;
 }
 
-/* icon-only or tiny action */
 .btnIcon {
   height: 28px;
   width: 28px;
@@ -578,70 +716,15 @@
   align-items: center;
   justify-content: center;
 }
-
-/* stacks */
 .btnStack {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* ============ Project Navigator ============ */
-.navList {
-  list-style: none;
-  padding-left: 0;
-  margin: 0;
-}
-.navListNested {
-  list-style: none;
-  padding-left: 12px;
-  margin: 6px 0 0 0;
-}
-.navItem {
-  margin-bottom: 6px;
-}
-.navItemSmall {
-  margin-bottom: 4px;
-}
-
-.navBtn,
-.navBtnSub,
-.navBtnLeaf {
-  display: inline-block;
-  width: 100%;
-  text-align: left;
-  border: 1px solid #e3e6ef;
-  background: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.navBtn {
-  padding: 6px 8px;
-}
-.navBtnSub {
-  padding: 4px 8px;
-  font-size: 0.95rem;
-}
-.navBtnLeaf {
-  padding: 3px 8px;
-  font-size: 0.9rem;
-}
-
-.flash {
-  animation: targetFlash 1.2s ease-out 1;
-}
-@keyframes targetFlash {
-  0% {
-    box-shadow: 0 0 0 2px rgba(255, 200, 0, 0.9) inset;
-    background: #fffbe6;
-  }
-  100% {
-    box-shadow: none;
-    background: inherit;
-  }
-}
-
-/* ============ Misc ============ */
+/* =========================================================
+   MISC + RESPONSIVE
+   ========================================================= */
 .stack-tight > * + * {
   margin-top: 8px;
 }
@@ -654,67 +737,152 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
+.midCol {
+  min-width: 0;
+  position: relative;
+  background: #fff;
+}
+
+/* Sticky title + control bar */
+.midSticky {
+  position: sticky;
+  background: #fff;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line-1);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
+  top: calc(var(--nav-height, 47px));
+  padding-top: 0;
+  --mid-sticky-height: 120px; /* <-- adjust once to match your title+controls height */
+  z-index: 100;
+}
+
+/* tighten on mid/large laptops */
+@media (max-width: 1600px) {
   .resultsGrid {
-    grid-template-columns: 1fr;
-  }
-  .enclosureTableWrap {
-    overflow-x: auto;
+    grid-template-columns: 1fr; /* Enclosure Results on first row, Zone Results on next row */
   }
 }
 
-/* Pills (already used for method labels) */
-.pill {
+/* Sticky system summary under the mid control bar */
+.sysSummaryBar {
+  position: sticky;
+  top: var(--app-sticky-top, 64px);
+  z-index: 6;
+  background: #fff;
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 8px 0 12px;
+  box-shadow: var(--shadow-1);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 14px;
+  align-items: center;
+}
+
+.sysSummaryTitle {
+  font-weight: 700;
+  margin-right: 10px;
+}
+
+.sysKpis {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.kpi {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
   gap: 6px;
-  border-radius: 999px;
+}
+.kpiLabel {
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.kpiValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.kpiInput {
+  width: 6ch;
+  text-align: right;
+  padding: 4px 6px;
+  height: 28px;
+  border: 1px solid var(--line-1);
+  border-radius: 6px;
+}
+
+.kpiBtns {
+  display: inline-flex;
+  gap: 4px;
+}
+.kpiBtn {
+  height: 26px;
+  width: 26px;
+  padding: 0;
   border: 1px solid var(--line-1);
   background: #fff;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-.pill--fm {
-  border-color: #93c5fd;
-  color: #1d4ed8;
-  background: #eef6ff;
-}
-.pill--nfpa-ac {
-  border-color: #cbd5e1;
-  color: #334155;
-  background: #f8fafc;
-}
-.pill--nfpa-b {
-  border-color: #c4b5fd;
-  color: #6d28d9;
-  background: #f5f3ff;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-/* Divider */
-.divider {
-  height: 1px;
-  background: var(--line-1);
-  margin: 8px 0;
+/* Shared numeric input style */
+.inputNum {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: right;
 }
 
-/* Enclosure Results: LEFT align checkbox + number */
-.enclosureResults td:has(> input[type="checkbox"]) {
+.inputNumSm {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: right;
+  width: 84px;
+}
+
+.inputNumXs {
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid #e5e8f1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: #fff;
+  box-sizing: border-box;
+  text-align: right;
+  width: 56px;
+}
+
+.labelGroup {
   display: flex;
   align-items: center;
-  justify-content: flex-start; /* left */
   gap: 8px;
 }
 
-/* Make the emitters number left-aligned for visual consistency */
-.enclosureResults input[type="number"] {
-  text-align: left;
-}
-
-/* Zone Results: RIGHT align checkbox + number */
-.zoneResults td:has(> input[type="checkbox"]) {
+.partcodeLabel {
   display: flex;
   align-items: center;
-  justify-content: flex-end; /* right */
+  gap: 8px;
+}
+
+.partcodeGroup {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }

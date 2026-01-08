@@ -7,14 +7,20 @@ import {
   StatusInput,
   PreEngineeredOptions,
   Units,
+  WaterTankCert,
 } from "@/state/app-model";
 
 import {
   selectWaterTankStrict,
   maxCapacityForCert,
   prettyCert,
-  WaterTankCert,
 } from "@/core/catalog/water_tanks.catalog";
+
+import {
+  buildPreEngSystemPartcodeFromConfig,
+  parseSystemPartcode,
+} from "@/core/calc/preengineered/partcode";
+import { resolveEmitterSpec } from "@/core/catalog/emitter.catalog";
 
 import type { Codes } from "@/core/catalog/parts.constants";
 import { statusFromCode } from "@/core/status/error-codes";
@@ -53,7 +59,12 @@ export function calculatePreEngineered(p: Project): {
 
   return { project: { ...p, systems }, messages };
 }
-
+export function asPreEngineeredOptions(sys: System): PreEngineeredOptions {
+  if (sys.options.kind !== "preengineered") {
+    throw new Error("Expected preengineered options for preengineered calc");
+  }
+  return sys.options;
+}
 // ─────────────────────────────────────────────────────────────
 /** SYSTEM WALKER + SYSTEM TOTALS + WATER TANK PICK (STRICT) */
 // ─────────────────────────────────────────────────────────────
@@ -64,69 +75,185 @@ function calcSystem(
 ): System {
   if (sys.options.kind !== "preengineered") return sys;
 
-  // 1) Zones
-  const zones = sys.zones.map((z) => calcZone(project, sys, z, messages));
-
-  // 2) Estimates: simple, fixed values per your legacy behavior
   const prev = sys.options as PreEngineeredOptions;
+  let sysForCalc: System = sys;
+  let optsAny: any = { ...(sys.options as any) };
+
+  // 0) Respect “System Partcode lock” on input:
+  //    - If locked and a user partcode is present, validate it strictly.
+  //    - If invalid, push a status error and DO NOT coerce/pad the code.
+  //    - We do *not* currently back-fill the config from the code; config is
+  //      assumed to already match that code.
+  if (prev.systemPartCodeLocked && prev.systemPartCode) {
+    const parsed = parseSystemPartcode(prev.systemPartCode);
+
+    // Narrow to the error case first
+    if (parsed.ok === false) {
+      const { reason, digit } = parsed;
+
+      if (reason === "digit") {
+        messages.push(
+          statusFromCode(
+            "SYS.INVALID_PARTCODE",
+            { systemId: sys.id },
+            {
+              message: `Invalid pre-engineered system partcode at digit [${digit}]. Check the digit value(s), then try again.`,
+            }
+          )
+        );
+      } else if (reason === "conflict") {
+        messages.push(
+          statusFromCode(
+            "SYS.INVALID_PARTCODE",
+            { systemId: sys.id },
+            {
+              message: `Invalid pre-engineered system partcode due to conflicting values at digit(s) [${digit}].`,
+            }
+          )
+        );
+      } else if (reason === "length") {
+        messages.push(
+          statusFromCode(
+            "SYS.INVALID_PARTCODE",
+            { systemId: sys.id },
+            {
+              message: `Invalid pre-engineered system partcode length. Expected 15 digits but received ${digit}.`,
+            }
+          )
+        );
+      } else if (reason === "empty") {
+        messages.push(
+          statusFromCode(
+            "SYS.INVALID_PARTCODE",
+            { systemId: sys.id },
+            {
+              message:
+                "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
+            }
+          )
+        );
+      }
+
+      // keep the user-entered string so they can see what was wrong
+      optsAny.systemPartCode = prev.systemPartCode;
+    } else {
+      if (optsAny.waterTankPick?.cert) {
+        optsAny.waterTankCertification = optsAny.waterTankPick.cert;
+      }
+      const { prePatch, zonePatch, enclosurePatch, formatted } = parsed.decoded;
+
+      optsAny = {
+        ...optsAny,
+        ...prePatch, // <- includes waterTankPick
+        systemPartCode: formatted, // <- normalized display
+      };
+
+      // Patch first zone + first enclosure for calc pass
+      const patchedZones = sys.zones.map((z, zi) => {
+        if (zi !== 0) return z;
+        return {
+          ...z,
+          ...zonePatch,
+          enclosures: z.enclosures?.map((e, ei) =>
+            ei !== 0 ? e : { ...e, ...enclosurePatch }
+          ),
+        };
+      });
+
+      sysForCalc = { ...sys, options: optsAny, zones: patchedZones } as System;
+    }
+  } else {
+    sysForCalc = { ...sys, options: optsAny } as System;
+  }
+
+  // 1) Zones
+  const zones = sysForCalc.zones.map((z) =>
+    calcZone(project, sysForCalc, z, messages)
+  );
+
+  // 2) Estimates
   const rp = 1;
   const mp = 9;
 
-  const optsAny = { ...(sys.options as any) };
   optsAny.estimates = {
     ...(prev.estimates || {}),
     releasePoints: rp,
     monitorPoints: mp,
   };
 
-  // 3) System totals for the pre-eng panel
-  const systemTotals = buildPreSystemTotals(
-    project,
-    { ...sys, options: optsAny } as System,
-    zones
-  );
+  // 3) WATER TANK
+  if (prev.systemPartCodeLocked) {
+    // Locked: do NOT derive tank requirement from zone water usage.
+    // Trust the decoded waterTankPick (from parse) and align certification to it.
+    const lockedPick = optsAny.waterTankPick ?? null;
 
-  // 4) WATER TANK (system-level, strict exact cert)
-  const zoneNeeds = zones
-    .map((z: any) => Number(z.waterTankMin_gal) || 0)
-    .filter((g) => g > 0);
-  const maxReqGal = zoneNeeds.length ? Math.max(...zoneNeeds) : 0;
-
-  const defaultCert: WaterTankCert =
-    project.currency === "USD" ? "US_ASME_FM" : "CE_SS316L";
-  const cert: WaterTankCert = optsAny.waterTankCertification ?? defaultCert;
-
-  let pickCodes: Codes | null = null;
-  let pickDesc: string | null = null;
-
-  if (maxReqGal > 0) {
-    const chosen = selectWaterTankStrict(cert, maxReqGal);
-    if (chosen) {
-      pickCodes = chosen.codes;
-      pickDesc = chosen.description;
-    } else {
-      const maxAvail = maxCapacityForCert(cert);
-      messages.push(
-        statusFromCode(
-          "SYS.TANK_CAPACITY",
-          { systemId: sys.id },
-          {
-            reqGal: Math.ceil(maxReqGal),
-            certPretty: prettyCert(cert),
-            maxGal: Math.ceil(maxAvail),
-          }
-        )
-      );
+    if (lockedPick?.cert) {
+      optsAny.waterTankCertification = lockedPick.cert;
     }
+
+    // Optional: keep required_gal undefined/null so UI/BOM can show "—"
+    optsAny.waterTankRequired_gal = null;
+
+    // Also do NOT overwrite optsAny.waterTankPick here.
+  } else {
+    // Normal sizing mode (existing behavior)
+    const zoneNeeds = zones
+      .map((z: any) => Number(z.waterTankMin_gal) || 0)
+      .filter((g) => g > 0);
+    const maxReqGal = zoneNeeds.length ? Math.max(...zoneNeeds) : 0;
+
+    const defaultCert: WaterTankCert =
+      project.currency === "USD" ? "ASME/FM" : "CE";
+    const cert: WaterTankCert = optsAny.waterTankCertification ?? defaultCert;
+
+    optsAny.waterTankRequired_gal = maxReqGal;
+    optsAny.waterTankCertification = cert;
+
+    let pickCodes: Codes | null = null;
+    let pickDesc: string | null = null;
+
+    if (maxReqGal > 0) {
+      const chosen = selectWaterTankStrict(cert, maxReqGal);
+      if (chosen) {
+        pickCodes = chosen.codes;
+        pickDesc = chosen.description;
+      } else {
+        const maxAvail = maxCapacityForCert(cert);
+        messages.push(
+          statusFromCode(
+            "SYS.TANK_CAPACITY",
+            { systemId: sys.id },
+            {
+              reqGal: Math.ceil(maxReqGal),
+              certPretty: prettyCert(cert),
+              maxGal: Math.ceil(maxAvail),
+            }
+          )
+        );
+      }
+    }
+
+    optsAny.waterTankPick = pickCodes
+      ? { codes: pickCodes, description: pickDesc, cert }
+      : null;
   }
 
-  optsAny.waterTankRequired_gal = maxReqGal;
-  optsAny.waterTankCertification = cert;
-  optsAny.waterTankPick = pickCodes
-    ? { codes: pickCodes, description: pickDesc, cert }
-    : null;
+  // 4) Totals MUST use the same system object that has patched options
+  const sysAfterCalc = {
+    ...sysForCalc,
+    zones,
+    options: { ...optsAny },
+  } as System;
 
-  return { ...sys, zones, systemTotals, options: { ...optsAny } };
+  const systemTotals = buildPreSystemTotals(project, sysAfterCalc, zones);
+
+  // 5) Partcode output generation (only when NOT locked)
+  if (!prev.systemPartCodeLocked) {
+    const pc = buildPreEngSystemPartcodeFromConfig(project, sysAfterCalc);
+    (sysAfterCalc.options as any).systemPartCode = pc ? pc.formatted : null;
+  }
+
+  return { ...sysAfterCalc, systemTotals };
 }
 
 /** Aggregate the small pre-eng summary block shown in your UI. */
@@ -175,11 +302,15 @@ function calcZone(
   );
 
   // Cyl count = sum of enclosure cylinderCount
-  const minTotalCylinders = enclosures.reduce(
-    (s, e) => s + (e.cylinderCount ?? 0),
-    0
-  );
-  const totalNitrogen = formatNitrogen(enclosures);
+  const opts = sys.options as PreEngineeredOptions;
+
+  const sumCyl = enclosures.reduce((s, e) => s + (e.cylinderCount ?? 0), 0);
+
+  const minTotalCylinders = opts.systemPartCodeLocked
+    ? (zone.overrideCylinders ?? sumCyl)
+    : sumCyl;
+
+  const totalNitrogenRequired_scf = formatNitrogen(enclosures);
 
   // Peak enclosure water GPM, and total discharged gal (sum across encs)
   const water_peak_gpm = Math.max(
@@ -198,7 +329,7 @@ function calcZone(
     ...zone,
     enclosures,
     minTotalCylinders,
-    totalNitrogen,
+    totalNitrogenRequired_scf,
     water_peak_gpm,
     waterDischarge_gal,
     waterTankMin_gal,
@@ -219,6 +350,7 @@ function calcEnclosure(
     zid = zone.id,
     eid = enc.id;
   const opts = sys.options as PreEngineeredOptions;
+  const isLocked = !!opts.systemPartCodeLocked;
 
   // 1) Volume in ft³, derived from L/W/H if present
   const volFt3 = deriveVolumeFt3(enc, project.units);
@@ -226,69 +358,147 @@ function calcEnclosure(
   // 2) Expected time by method (NFPA 3.0, FM DC 3.5)
   const tExpected = getExpectedTime(enc.method);
 
-  // 3) Cylinder pick: try 49L, conditionally fallback to 80L
+  // 3) Locked mode: treat decoded partcode as law (no sizing from volume/temp)
+  let chosen: {
+    size: "49L" | "80L";
+    count: number;
+    o2: number;
+    label: string;
+    w_cyl: number;
+    w_usable: number;
+  } | null = null;
+
+  let bundle: Bundle;
+  let emitters: number;
+  let tActual: number;
+
   const cyl49 = getCylinderSpec("49L", opts.fillPressure);
   const cyl80 = getCylinderSpec("80L", opts.fillPressure);
 
-  let chosen = pickCylinders(project, enc, volFt3, cyl49, {
-    minForFM49L: enc.method === "FM Data Centers" ? 2 : 1,
-  });
+  if (isLocked) {
+    // Cylinder size comes from decode (_cylinderSize), fallback to 49L
+    const size = ((enc as any)._cylinderSize === "80L" ? "80L" : "49L") as
+      | "49L"
+      | "80L";
 
-  // Fallback rules for 80L
-  const currency = project.currency;
-  if (
-    chosen.size === "49L" &&
-    (chosen.o2 > 14.1 ||
-      chosen.count > 4 ||
-      currency === "EUR" ||
-      currency === "GBP")
-  ) {
-    chosen = pickCylinders(project, enc, volFt3, cyl80);
+    const cylSpec = size === "80L" ? cyl80 : cyl49;
 
-    if (chosen.count > 8) {
+    // Cylinder count comes from zone override (preferred) else existing enc.cylinderCount
+    const count =
+      (zone.overrideCylinders ?? null) != null
+        ? Number(zone.overrideCylinders)
+        : Number(enc.cylinderCount ?? 0);
+
+    const safeCount = Number.isFinite(count) && count > 0 ? count : 0;
+
+    // O2 is not encoded in partcode; we can still compute it for display,
+    // but it must NOT affect selection.
+    const T = toKelvin(enc.tempF, project.units);
+    const acf = calcACF(project.elevation, project.units);
+    const o2 = calcOxygen(enc, project, safeCount, cylSpec.w_cyl, volFt3, acf);
+
+    chosen = {
+      size: cylSpec.size,
+      count: safeCount,
+      o2,
+      label: cylSpec.label,
+      w_cyl: cylSpec.w_cyl,
+      w_usable: cylSpec.w_usable,
+    };
+
+    // Bundle MUST come from nozzle+style (partcode-decoded)
+    const picked = pickBundleFromNozzle(enc);
+    if (!picked) {
       messages.push(
-        statusFromCode("ENC.CYL_LIMIT", {
+        statusFromCode("ENC.TIME_CONSTRAINT", {
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
         })
       );
+      // fall back to old selection logic so the UI doesn't crash
+      bundle = getMethodBundlesForEnclosure(enc)[0] ?? BUNDLES[0];
+    } else {
+      bundle = picked;
+      if (bundle.op_psi == 25) {
+        pushNote(enc, "Panel Pressure Setting: 32 psi.");
+      } else if (bundle.op_psi == 50) {
+        pushNote(enc, "Panel Pressure Setting: 55 psi.");
+      }
     }
-    if (chosen.o2 > 14.1) {
+
+    // Emitters count comes from decoded override
+    const overrideEmitters =
+      (enc.customMinEmitters ?? null) != null
+        ? Number(enc.customMinEmitters)
+        : Number(enc.minEmitters ?? 0);
+
+    emitters =
+      Number.isFinite(overrideEmitters) && overrideEmitters > 0
+        ? overrideEmitters
+        : 0;
+
+    const totalUsableLb = chosen.count * chosen.w_usable;
+    tActual = emitters > 0 ? totalUsableLb / (bundle.q_n2 * emitters) : 0;
+  } else {
+    // 3) Normal sizing mode (existing behavior)
+    chosen = pickCylinders(project, enc, volFt3, cyl49, {
+      minForFM49L: enc.method === "FM Data Centers" ? 2 : 1,
+    });
+
+    const currency = project.currency;
+    if (
+      chosen.size === "49L" &&
+      (chosen.o2 > 14.1 ||
+        chosen.count > 4 ||
+        currency === "EUR" ||
+        currency === "GBP")
+    ) {
+      chosen = pickCylinders(project, enc, volFt3, cyl80);
+
+      if (chosen.count > 8) {
+        messages.push(
+          statusFromCode("ENC.CYL_LIMIT", {
+            systemId: sid,
+            zoneId: zid,
+            enclosureId: eid,
+          })
+        );
+      }
+      if (chosen.o2 > 14.1) {
+        messages.push(
+          statusFromCode("ENC.O2_HIGH", {
+            systemId: sid,
+            zoneId: zid,
+            enclosureId: eid,
+          })
+        );
+      }
+    }
+
+    const solved = solveEmitters(enc, chosen);
+    if (!solved.ok) {
       messages.push(
-        statusFromCode("ENC.O2_HIGH", {
-          systemId: sid,
-          zoneId: zid,
-          enclosureId: eid,
-        })
+        statusFromCode(
+          "ENC.TIME_CONSTRAINT",
+          { systemId: sid, zoneId: zid, enclosureId: eid },
+          { method: enc.method }
+        )
       );
     }
+
+    bundle = solved.bundle;
+    emitters = solved.emitters;
+    tActual = solved.tActualMin;
   }
 
-  // 4) Emitter bundle selection + integer emitter solve to meet time window
-  const solved = solveEmitters(enc, chosen);
-  if (!solved.ok) {
-    messages.push(
-      statusFromCode(
-        "ENC.TIME_CONSTRAINT",
-        { systemId: sid, zoneId: zid, enclosureId: eid },
-        { method: enc.method }
-      )
-    );
-  }
-
-  const bundle = solved.bundle;
-  const emitters = solved.emitters;
-  const tActual = solved.tActualMin;
-
-  // (CLEANUP) Deduped: style compatibility check (was duplicated)
   if (enc.emitterStyle && !bundle.allowedStyles.includes(enc.emitterStyle)) {
     messages.push(
-      statusFromCode("ENC.EMITTER_STYLE", {
+      statusFromCode("ENC.NOZZLE_STYLE", {
         systemId: sid,
         zoneId: zid,
         enclosureId: eid,
-        field: "emitterStyle",
+        field: "nozzleStyle",
       })
     );
   }
@@ -324,32 +534,33 @@ function calcEnclosure(
   }
 
   // Occupancy advisories (same thresholds as legacy)
-  if (chosen.o2 < 12 && chosen.o2 >= 10) {
-    messages.push(
-      statusFromCode("ENC.O2_LOW_MOD", {
-        systemId: sid,
-        zoneId: zid,
-        enclosureId: eid,
-      })
-    );
-  } else if (chosen.o2 < 10 && chosen.o2 >= 8) {
-    messages.push(
-      statusFromCode("ENC.O2_LOW_SUB", {
-        systemId: sid,
-        zoneId: zid,
-        enclosureId: eid,
-      })
-    );
-  } else if (chosen.o2 < 8) {
-    messages.push(
-      statusFromCode("ENC.O2_VERY_LOW", {
-        systemId: sid,
-        zoneId: zid,
-        enclosureId: eid,
-      })
-    );
+  if (!isLocked) {
+    if (chosen.o2 < 12 && chosen.o2 >= 10) {
+      messages.push(
+        statusFromCode("ENC.O2_LOW_MOD", {
+          systemId: sid,
+          zoneId: zid,
+          enclosureId: eid,
+        })
+      );
+    } else if (chosen.o2 < 10 && chosen.o2 >= 8) {
+      messages.push(
+        statusFromCode("ENC.O2_LOW_SUB", {
+          systemId: sid,
+          zoneId: zid,
+          enclosureId: eid,
+        })
+      );
+    } else if (chosen.o2 < 8) {
+      messages.push(
+        statusFromCode("ENC.O2_VERY_LOW", {
+          systemId: sid,
+          zoneId: zid,
+          enclosureId: eid,
+        })
+      );
+    }
   }
-
   // 5) N2 requirement and water math for display
   const qN2Req = calcReqNitrogenFlow(
     volFt3,
@@ -524,7 +735,11 @@ const BUNDLES: Bundle[] = [
     op_psi: 50,
     q_n2: 369,
     q_water: 0.53,
-    allowedStyles: ["escutcheon-stainless", "standard-pvdf"],
+    allowedStyles: [
+      "escutcheon-stainless",
+      "standard-pvdf",
+      "standard-stainless",
+    ],
     label: '5/8" Cavity @ 50 psi',
   },
   {
@@ -534,7 +749,11 @@ const BUNDLES: Bundle[] = [
     op_psi: 25,
     q_n2: 230,
     q_water: 0.26,
-    allowedStyles: ["escutcheon-stainless", "standard-pvdf"],
+    allowedStyles: [
+      "escutcheon-stainless",
+      "standard-pvdf",
+      "standard-stainless",
+    ],
     label: '5/8" Cavity @ 25 psi',
   },
   {
@@ -652,13 +871,13 @@ function formatMinutes(mins: number): string {
   return !isFinite(mins) || mins <= 0 ? "" : `${mins.toFixed(1)} min`;
 }
 
-function formatNitrogen(encs: Enclosure[]): string {
+function formatNitrogen(encs: Enclosure[]): number {
   const vals = (encs as any[])
     .map((e) => e._qN2Req)
     .filter((x) => typeof x === "number");
-  if (!vals.length) return "";
+  if (!vals.length) return 0;
   const sum = vals.reduce((a: number, b: number) => a + b, 0);
-  return `${sum.toFixed(1)} lb/min`;
+  return sum;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -781,7 +1000,7 @@ type SolveFail = {
   bundle: Bundle;
   emitters: number;
   tActualMin: number;
-  reason: "TOO_SHORT" | "TOO_LONG" | "ZERO_EMITTERS";
+  reason: "TOO_SHORT" | "TOO_LONG" | "ZERO_NOZZLES";
   gap: number;
 };
 
@@ -799,7 +1018,7 @@ function solveForBundle(
     const t = n > 0 ? totalUsableLb / (q * n) : 0;
     if (n > 0 && t >= tExp)
       return { ok: true, bundle, emitters: n, tActualMin: t };
-    const reason = n <= 0 ? "ZERO_EMITTERS" : "TOO_SHORT";
+    const reason = n <= 0 ? "ZERO_NOZZLES" : "TOO_SHORT";
     const gap = n <= 0 ? tExp : Math.max(0, tExp - t);
     return {
       ok: false,
@@ -879,8 +1098,35 @@ function solveEmitters(
       bundle: BUNDLES[0],
       emitters: 0,
       tActualMin: 0,
-      reason: "ZERO_EMITTERS",
+      reason: "ZERO_NOZZLES",
       gap: Infinity,
     }
   );
+}
+function pickBundleFromNozzle(enc: Enclosure): Bundle | null {
+  if (!enc.nozzleCode || !enc.emitterStyle) return null;
+
+  const spec = resolveEmitterSpec(
+    enc.method as any,
+    enc.nozzleCode as any,
+    enc.emitterStyle as any
+  );
+  if (!spec) return null;
+
+  // Match by method + q_n2 + q_water + style allowance.
+  // (These are the most stable keys you have in this module.)
+  const candidates = BUNDLES.filter(
+    (b) =>
+      b.method === enc.method &&
+      b.q_n2 === spec.q_n2 &&
+      b.q_water === spec.q_water &&
+      b.allowedStyles.includes(enc.emitterStyle as any)
+  );
+
+  return candidates[0] ?? null;
+}
+function pushNote(enc: any, note: string) {
+  if (!note) return;
+  const arr = Array.isArray(enc.notes) ? enc.notes : (enc.notes = []);
+  if (!arr.includes(note)) arr.push(note);
 }
