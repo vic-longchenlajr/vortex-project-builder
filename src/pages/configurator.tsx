@@ -1191,7 +1191,7 @@ function EmitterImagePanel({ zone }: { zone: any }) {
   }
 
   // Images live in /public; filenames are "1.png", "2.png", ...
-  const src = `/${emitters}.png`;
+  const src = `/img/nozzles/${emitters}.png`;
   const alt = `${emitters} nozzle${emitters === 1 ? "" : "s"} layout preview`;
 
   return (

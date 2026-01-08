@@ -196,7 +196,7 @@ export default function Guide() {
           {/* ───────── STEP 1: Project Setup ───────── */}
           <div className={styles.workflowBlock}>
             <img
-              src="/guide/step1.png"
+              src="/img/guide/step1.png"
               alt="Project Setup: Pricing & Project Options"
               className={styles.workflowImg}
             />
@@ -240,7 +240,7 @@ export default function Guide() {
           {/* ───────── STEP 2: Engineered — Pre-Calculation ───────── */}
           <div className={styles.workflowBlock}>
             <img
-              src="/guide/step2.png"
+              src="/img/guide/step2.png"
               alt="Engineered: Pre-Calculation"
               className={styles.workflowImg}
             />
@@ -282,7 +282,7 @@ export default function Guide() {
           {/* ───────── STEP 3: Engineered — Post-Calculation ───────── */}
           <div className={styles.workflowBlock}>
             <img
-              src="/guide/step3.png"
+              src="/img/guide/step3.png"
               alt="Engineered: Post-Calculation"
               className={styles.workflowImg}
             />
@@ -329,7 +329,7 @@ export default function Guide() {
           {/* ───────── STEP 4: Pre-Engineered — Pre-Calculation ───────── */}
           <div className={styles.workflowBlock}>
             <img
-              src="/guide/step4.png"
+              src="/img/guide/step4.png"
               alt="Pre-Engineered: Pre-Calculation"
               className={styles.workflowImg}
             />
@@ -362,7 +362,7 @@ export default function Guide() {
           {/* ───────── STEP 5: Pre-Engineered — Post-Calculation ───────── */}
           <div className={styles.workflowBlock}>
             <img
-              src="/guide/step5.png"
+              src="/img/guide/step5.png"
               alt="Pre-Engineered: Post-Calculation"
               className={styles.workflowImg}
             />
@@ -515,542 +515,6 @@ export default function Guide() {
           </p>
         </section>
 
-        {/* ───────── ERROR CODES (Dedicated) ───────── */}
-        {/* <section id="errors" className={`${styles.section} ${styles.light}`}>
-          <h2 className={styles.sectionHeading}>Error Codes</h2>
-          <p>
-            Use this reference when Status shows <strong>errors</strong>{" "}
-            (blocking) or <strong>warnings</strong> (advisory).
-          </p>
-          <div className={styles.tableWrap}>
-            <table className={styles.tableLight}>
-              <thead>
-                <tr>
-                  <th style={{ whiteSpace: "nowrap" }}>Code</th>
-                  <th>Appears When</th>
-                  <th>Meaning</th>
-                  <th>Resolution Steps</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={4}>
-                    <strong>Errors — Must Be Resolved</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>PROJ.MISSING_FIELDS</code>
-                  </td>
-                  <td>On Validate / Before Calculate</td>
-                  <td>
-                    Project header fields are incomplete (name, contact, etc.).
-                  </td>
-                  <td>
-                    <em>
-                      Fill in all required project fields before running
-                      calculations.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.MISSING_NAME</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>System name is empty.</td>
-                  <td>
-                    <em>Enter a system name to identify this configuration.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.INVALID_CHARS</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    System name includes invalid characters (* ? : \ / [ ]).
-                  </td>
-                  <td>
-                    <em>Remove restricted characters from the system name.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.NO_ZONES</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>System has no zones.</td>
-                  <td>
-                    <em>Add at least one zone to calculate or export.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.FM_TANK_REQ</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>FM method enclosure used with CE-only water tank.</td>
-                  <td>
-                    <em>
-                      Change water tank certification to an FM-approved option
-                      (ASME/FM or CE/ASME/FM).
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.DUPLICATE_NAME</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>Duplicate system name in project.</td>
-                  <td>
-                    <em>Rename one of the systems so names are unique.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ZONE.INVALID_CHARS</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    Zone name includes invalid characters (* ? : \ / [ ]).
-                  </td>
-                  <td>
-                    <em>Remove restricted characters from the zone name.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ZONE.NO_ENCLOSURES</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>No enclosures in this zone.</td>
-                  <td>
-                    <em>
-                      Add at least one enclosure before running calculations.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ZONE.DUPLICATE_NAME</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>Two zones share the same name within a system.</td>
-                  <td>
-                    <em>Rename zones to ensure each has a unique name.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ZONE.DM_MISMATCH</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>Zone mixes incompatible design methods.</td>
-                  <td>
-                    <em>
-                      Split the zone or use only NFPA 770 Class A/C + B methods
-                      together.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.INVALID_CHARS</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    Enclosure name includes invalid characters (* ? : \ / [ ]).
-                  </td>
-                  <td>
-                    <em>Rename enclosure to remove restricted characters.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.TEMP_RANGE</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>Temperature outside 40–130°F (4.4–54.4°C) range.</td>
-                  <td>
-                    <em>Adjust enclosure temperature to valid range.</em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.VOLUME_EMPTY</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>Volume or dimensions are zero or missing.</td>
-                  <td>
-                    <em>
-                      Enter valid enclosure dimensions (L×W×H) or volume before
-                      calculation.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.FMDC_VOLUME_LIMIT</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    FM Data Centers volume exceeds 31,350 ft³ / 2,912 m³ limit.
-                  </td>
-                  <td>
-                    <em>
-                      Split into smaller zones or change method to reduce
-                      volume.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.FM_VOLUME_LIMIT</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    FM Turbines or FM Machine Spaces volume exceeds 127,525 ft³
-                    / 3,611 m³.
-                  </td>
-                  <td>
-                    <em>Divide the enclosure or adjust design method.</em>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <code>ENC.FMDC_MIN_DISCHARGE</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>FM Data Centers discharge time &lt; 3.5 min.</td>
-                  <td>
-                    <em>
-                      Add cylinders or lower flow (smaller nozzle or fewer
-                      nozzles) until discharge time ≥ 3.5 min.
-                    </em>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <code>ENC.CYL_LIMIT</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    More than 8 × 80 L cylinders required (exceeds pre-eng
-                    limits).
-                  </td>
-                  <td>
-                    <em>
-                      Split the enclosure, switch to engineered, or reduce
-                      volume.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.O2_HIGH</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Calculated O₂ &gt; 14.1 % — insufficient nitrogen for
-                    extinguishment.
-                  </td>
-                  <td>
-                    <em>
-                      Add cylinders or use higher-pressure cylinders to lower
-                      final O₂ below 14.1 %.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.TIME_CONSTRAINT</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    No valid nozzle/pressure combination meets discharge time.
-                  </td>
-                  <td>
-                    <em>
-                      Try different nozzle size, nozzle style, or fill
-                      pressure; if limits persist, switch to engineered mode.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.EMITTER_STYLE</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Selected nozzle style not compatible with nozzle/method.
-                  </td>
-                  <td>
-                    <em>
-                      Select an allowed style for that nozzle and method (see
-                      nozzle catalog).
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.HEIGHT_LIMIT</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Ceiling height exceeds FM limits (5/8&quot; ≤ 24.5 ft;
-                    3/8&quot; ≤ 16 ft).
-                  </td>
-                  <td>
-                    <em>
-                      Lower ceiling height, pick smaller nozzle, or redesign
-                      layout per FM table.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.FM_SPACING</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Room dimensions violate FM nozzle spacing requirements.
-                  </td>
-                  <td>
-                    <em>
-                      Increase nozzle count, change nozzle size, or divide
-                      room to meet spacing table.
-                    </em>
-                  </td>
-                </tr>
-
-                <tr>
-                  <td colSpan={4}>
-                    <strong>Warnings — Advisory Only</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.PANEL_MISMATCH</code>
-                  </td>
-                  <td>On Validate</td>
-                  <td>
-                    Multi-zone engineered system uses AR panel; DC recommended.
-                  </td>
-                  <td>
-                    <em>
-                      Switch panel style to Dry Contact for multi-zone systems.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>SYS.TANK_CAPACITY</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Required water tank size exceeds available capacity for
-                    selected certification.
-                  </td>
-                  <td>
-                    <em>
-                      Select a larger or dual tank configuration, or change
-                      certification.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ZONE.CUSTOM_CYLINDERS</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    User override of cylinder count differs from recommended
-                    minimum.
-                  </td>
-                  <td>
-                    <em>
-                      Verify nitrogen requirement and O₂ level before
-                      proceeding.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.CUSTOM_EMITTERS</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    User override of nozzle count differs from calculated
-                    minimum.
-                  </td>
-                  <td>
-                    <em>
-                      Verify per-enclosure discharge time and oxygen values.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.DISCHARGE_TIME_EXCEEDS</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Estimated discharge time &gt; 3 minutes (NFPA 770 limit).
-                  </td>
-                  <td>
-                    <em>
-                      Increase nozzle count or use a smaller nozzle to raise
-                      flow and shorten time.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.N2_NOT_MET</code>
-                  </td>
-                  <td>On Calculate</td>
-                  <td>
-                    Delivered nitrogen &lt; required or O₂ &gt; 13.36 %.
-                    Discharge time is set to “-”.
-                  </td>
-                  <td>
-                    <em>
-                      Reduce enclosure nozzle size or increase cylinder count to
-                      meet nitrogen requirement.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.O2_LOW_MOD</code>
-                  </td>
-                  <td>On Calculate (Pre-Eng)</td>
-                  <td>Final O₂ between 10–12 % — reduced occupancy time.</td>
-                  <td>
-                    <em>
-                      Warn personnel; review occupancy limits per NFPA 770.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.O2_LOW_SUB</code>
-                  </td>
-                  <td>On Calculate (Pre-Eng)</td>
-                  <td>
-                    Final O₂ between 8–10 % — substantially reduced occupancy
-                    time.
-                  </td>
-                  <td>
-                    <em>
-                      Warn personnel; review occupancy limits per NFPA 770.
-                    </em>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>ENC.O2_VERY_LOW</code>
-                  </td>
-                  <td>On Calculate (Pre-Eng)</td>
-                  <td>Final O₂ below 8 % — occupancy not recommended.</td>
-                  <td>
-                    <em>Restrict access and review the design.</em>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="workbook" className={`${styles.section} ${styles.dark}`}>
-          <h2 className={styles.sectionHeading}>Project Workbook Breakdown</h2>
-          <p>When you export, the excel workbook includes these sheets:</p>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Sheet</th>
-                  <th>What it shows</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <strong>&lt;Project Name&gt; Overview</strong>
-                  </td>
-                  <td>
-                    One sheet per project — Provides a top-level summary of the
-                    project, including metadata (project name, currency, units,
-                    elevation), a list of systems with their total net price,
-                    and a summary of each enclosure’s calculated results. Use
-                    this as your quick snapshot of the overall configuration.
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <strong>&lt;System Name&gt; – Consolidated BOM</strong>
-                  </td>
-                  <td>
-                    One sheet per system — Displays the complete bill of
-                    materials (BOM) organized into three main sections:
-                    <em> Enclosure Supply</em>, <em>Zone Supply</em>, and{" "}
-                    <em>System Supply</em>. Each section aggregates quantities
-                    across enclosures and zones, giving you a single-line view
-                    of all components required for that system.
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <strong>&lt;System Name&gt; – Detailed BOM</strong>
-                  </td>
-                  <td>
-                    One sheet per <strong>Engineered System</strong> — Expands
-                    on the Consolidated BOM by listing each component at the
-                    enclosure and zone-supply level. This sheet shows exactly
-                    where each part is used and allows cross-checking against
-                    zone configurations for traceability during design review or
-                    ordering.
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <strong>&lt;System Name&gt; – Pipe Guidance</strong>
-                  </td>
-                  <td>
-                    One sheet per <strong>Pre-Engineered System</strong> —
-                    Provides reference pipe routing and sizing guidance based on
-                    the computed nitrogen flow rate. Includes recommended pipe
-                    diameters, run lengths, and connection layouts for each
-                    nozzle branch, aligned with current pre-engineered
-                    standards.
-                  </td>
-                </tr>
-
-                <tr>
-                  <td>
-                    <strong>FACP Monitor & Release Points</strong>
-                  </td>
-                  <td>
-                    One sheet per project — Lists all monitor and release points
-                    derived from system logic, panel requirements, and design
-                    selections. This includes detection devices, solenoids,
-                    abort switches, and supervision points grouped by zone and
-                    enclosure, suitable for integration with the Fire Alarm
-                    Control Panel (FACP) design.
-                  </td>
-                </tr>
-              </tbody>{" "}
-            </table>
-          </div>
-        </section> */}
-
         <section id="errors" className={`${styles.section} ${styles.light}`}>
           <h2 className={styles.sectionHeading}>Error Codes</h2>
           <p>
@@ -1081,6 +545,95 @@ export default function Guide() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section id="workbook" className={`${styles.section} ${styles.dark}`}>
+          <h2 className={styles.sectionHeading}>Project Workbook Breakdown</h2>
+          <p>
+            When you export a project, the generated Excel workbook contains the
+            following sheets:
+          </p>
+
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Sheet</th>
+                  <th>What it shows</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>&lt;Project Name&gt; – Summary</strong>
+                  </td>
+                  <td>
+                    One sheet per project. Provides a high-level overview
+                    including project metadata (project name, currency, units,
+                    elevation), a list of all systems with total estimated net
+                    price, and a summarized view of calculated results for each
+                    enclosure. This sheet is intended as a quick snapshot of the
+                    overall configuration.
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <strong>&lt;System Name&gt; – Consolidated BOM</strong>
+                  </td>
+                  <td>
+                    One sheet per system. Displays the full bill of materials
+                    grouped into <em>Enclosure Supply</em>, <em>Zone Supply</em>
+                    , and <em>System Supply</em>. Quantities are aggregated
+                    across all enclosures and zones, providing a concise,
+                    order-ready material summary for the system.
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <strong>&lt;System Name&gt; – Detailed BOM</strong>
+                  </td>
+                  <td>
+                    One sheet per <strong>Engineered System</strong>. Breaks
+                    down the bill of materials at the enclosure and zone level,
+                    showing exactly where each component is applied. This sheet
+                    is useful for design validation, internal review, and
+                    cross-referencing enclosure configurations prior to
+                    ordering.
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <strong>
+                      &lt;System Name&gt; – Piping & Enclosure Req
+                    </strong>
+                  </td>
+                  <td>
+                    One sheet per <strong>Pre-Engineered System</strong>.
+                    Provides pipe sizing and routing guidance derived from the
+                    calculated nitrogen flow rate. Includes recommended pipe
+                    diameters, allowable run lengths, and typical branch layouts
+                    aligned with current pre-engineered standards.
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <strong>FACP Monitor & Release Points</strong>
+                  </td>
+                  <td>
+                    One sheet per project. Lists all monitor and release points
+                    generated from system logic, nitrogen source grouping, and
+                    design selections. Includes detection devices, solenoids,
+                    abort switches, and supervision points grouped by system,
+                    zone, and enclosure for integration into Fire Alarm Control
+                    Panel (FACP) design.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

@@ -1,8 +1,6 @@
 import React from "react";
 import { useAppModel } from "@/state/app-model";
-import card from "@/styles/configurator.module.css";
 import styles from "@/styles/statusconsole.module.css";
-import { codeHref } from "@/core/status/error-codes";
 
 export default function StatusConsole() {
   const { project, status, hasErrors } = useAppModel();

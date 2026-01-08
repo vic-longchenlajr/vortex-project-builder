@@ -47,7 +47,7 @@ export default function Home() {
 
             <div className={styles.heroImageWrap} aria-hidden>
               <Image
-                src="/cylinders.png"
+                src="/img/assets/cylinders.png"
                 alt=""
                 fill
                 priority
