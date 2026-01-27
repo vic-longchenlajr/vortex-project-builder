@@ -85,9 +85,7 @@ export type Enclosure = {
     | "NFPA 770 Class A/C"
     | "NFPA 770 Class B"
     | "FM Data Centers"
-    | "FM Turbines"
-    | "FM Machine Spaces";
-
+    | "FM Machine Spaces/Turbines";
   length?: number;
   width?: number;
   height?: number;
@@ -518,6 +516,29 @@ function coerceStyle(
   if (candidate && styles.includes(candidate)) return candidate;
   return firstOrUndef(styles);
 }
+type HasName = { name?: string | null };
+
+/** Treat blank or "Zone 3" / "System 2" / "Enclosure 10" as default names. */
+function isBlankOrDefaultIndexedName(
+  name: string | null | undefined,
+  base: string
+) {
+  const n = (name ?? "").trim();
+  if (!n) return true;
+  const re = new RegExp(`^${base}\\s+\\d+$`); // exact: "Zone 12"
+  return re.test(n);
+}
+
+/** After deletions, rename only defaults ("Zone X") + blanks to match new index. */
+function reindexDefaultNames<T extends HasName>(items: T[], base: string): T[] {
+  return items.map((it, i) => {
+    const nextDefault = `${base} ${i + 1}`;
+    if (isBlankOrDefaultIndexedName(it.name, base)) {
+      return { ...it, name: nextDefault };
+    }
+    return it; // keep custom names
+  });
+}
 /* ─────────────────────────────────────────────────────────────
    VALIDATION (CALCULATION-FREE)
    ───────────────────────────────────────────────────────────── */
@@ -581,8 +602,7 @@ function validateProject(project: Project): StatusMessage[] {
       z.enclosures.some(
         (e) =>
           e.method === "FM Data Centers" ||
-          e.method === "FM Turbines" ||
-          e.method === "FM Machine Spaces"
+          e.method === "FM Machine Spaces/Turbines"
       )
     );
     if (hasFMMethod && tank === "CE") {
@@ -590,6 +610,37 @@ function validateProject(project: Project): StatusMessage[] {
         id: id(),
         ...statusFromCode("SYS.FM_TANK_REQ", { systemId: sys.id }),
       });
+    }
+    if (sys.options.kind === "engineered") {
+      if (sys.options.bulkTubes) {
+        msgs.push({
+          ...statusFromCode("SYS.BULK_TUBES_EXCLUDED", { systemId: sys.id }),
+          id: id(),
+        });
+      }
+    }
+    // Detect whether this system contains any FM Machine Spaces/Turbines enclosure
+    const hasFMMachine = sys.zones.some((z) =>
+      z.enclosures.some((e) => e.method === "FM Machine Spaces/Turbines")
+    );
+
+    // Rundown time warning: value entered but no FM Machine Spaces/Turbines enclosures
+    if (sys.options.kind === "engineered") {
+      const rt = Number((sys.options as EngineeredOptions).rundownTimeMin ?? 0);
+      const hasRt = Number.isFinite(rt) && rt > 0;
+
+      if (hasRt && !hasFMMachine) {
+        msgs.push({
+          id: id(),
+          ...statusFromCode(
+            "SYS.RUNDOWN_TIME_UNUSED",
+            { systemId: sys.id },
+            {}
+          ),
+          field: "rundownTimeMin",
+          systemId: sys.id, // redundant but explicit is fine
+        });
+      }
     }
 
     // Zones + enclosures
@@ -724,10 +775,7 @@ function validateProject(project: Project): StatusMessage[] {
           }
         }
 
-        if (
-          enc.method === "FM Turbines" ||
-          enc.method === "FM Machine Spaces"
-        ) {
+        if (enc.method === "FM Machine Spaces/Turbines") {
           const maxFt3 = 127525;
           const maxM3 = 3611.1;
           const exceeds =
@@ -854,6 +902,9 @@ export function checkZoneDesignMethodCompatibility(
    CONTEXT API
    ───────────────────────────────────────────────────────────── */
 
+// ─────────────────────────────────────────────────────────────
+// CONTEXT API (type Model) — add hasCalculated to the context value
+// ─────────────────────────────────────────────────────────────
 type Model = {
   project: Project;
 
@@ -907,6 +958,7 @@ type Model = {
 
   // Derived
   hasErrors: boolean;
+  hasCalculated: boolean; // ✅ new
 
   // Import/Export
   exportProjectToFile: () => void;
@@ -920,6 +972,12 @@ type Model = {
 
   // NEW
   clearProject: () => void;
+
+  // Autosave control (used by tutorial temp mode)
+  setAutosaveEnabled: (enabled: boolean) => void;
+
+  // Restore a project snapshot (raw JSON from localStorage "vortex:autosave")
+  restoreAutosaveFromRaw: (raw: string) => void;
 };
 
 const AppModelContext = createContext<Model | null>(null);
@@ -938,6 +996,41 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   const [priceIndex, setPriceIndex] = useState<PriceIndex | null>(null);
   const [priceIndexReady, setPriceIndexReady] = useState(false);
   const [projectListPrice, setProjectListPrice] = useState<number | null>(null);
+
+  // ✅ Calculation gating
+  const [hasCalculated, setHasCalculated] = useState(false);
+  const [autosaveEnabled, setAutosaveEnabled] = useState(true);
+
+  const restoreAutosaveFromRaw: Model["restoreAutosaveFromRaw"] = (raw) => {
+    try {
+      const snap = parseSnapshot(raw);
+      if (snap?.project) {
+        setStatus([]);
+        setProjectListPrice(null);
+        setHasCalculated(false);
+        setProject(snap.project as Project);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // ✅ Any input mutation should call this
+  const markDirty = () => {
+    setHasCalculated(false);
+    setProjectListPrice(null);
+  };
+
+  // ✅ Helper wrappers to reduce repetition
+  const mutateProject = (updater: (p: Project) => Project) => {
+    markDirty();
+    setProject(updater);
+  };
+
+  const mutateProjectNoDirty = (updater: (p: Project) => Project) => {
+    // use for calculate paths (does NOT reset hasCalculated)
+    setProject(updater);
+  };
 
   /* ---------- Find helpers ---------- */
   const findSystemIndex = (sid: string) =>
@@ -977,30 +1070,28 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   /* ---------- Project CRUD ---------- */
-  // ---------- Clear Project ----------
   const clearProject: Model["clearProject"] = () => {
     if (!confirm("Clear the entire project and reset all fields?")) return;
 
-    // wipe autosave so it doesn't immediately restore the old state
     try {
       localStorage.removeItem("vortex:autosave");
     } catch {
       /* ignore */
     }
 
-    // clear UI state
     setStatus([]);
     setProjectListPrice(null);
+    setHasCalculated(false);
 
-    // reset to defaults
     setProject(DEFAULT_PROJECT);
   };
 
-  const updateProject: Model["updateProject"] = (patch) =>
-    setProject((p) => ({ ...p, ...patch }));
+  const updateProject: Model["updateProject"] = (patch) => {
+    mutateProject((p) => ({ ...p, ...patch }));
+  };
 
   const addSystem: Model["addSystem"] = (type) => {
-    setProject((p) => ({
+    mutateProject((p) => ({
       ...p,
       systems: [
         ...p.systems,
@@ -1020,8 +1111,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const addZone: Model["addZone"] = (systemId) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
       const sys = p.systems[sidx];
 
@@ -1030,25 +1121,20 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const nextZone =
         sys.type === "engineered"
-          ? makeDefaultEngZone(sys.zones.length) // includes 1 default enclosure
-          : makeDefaultPreZone(); // existing behavior
-
-      const next: System = {
-        ...sys,
-        zones: [...sys.zones, nextZone],
-      };
+          ? makeDefaultEngZone(sys.zones.length)
+          : makeDefaultPreZone();
 
       const systems = [...p.systems];
-      systems[sidx] = next;
+      systems[sidx] = { ...sys, zones: [...sys.zones, nextZone] };
       return { ...p, systems };
     });
   };
 
   const addEnclosure: Model["addEnclosure"] = (systemId, zoneId) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
-      const zidx = findZoneIndex(sidx, zoneId);
+      const zidx = p.systems[sidx].zones.findIndex((z) => z.id === zoneId);
       if (zidx < 0) return p;
 
       const sys = p.systems[sidx];
@@ -1059,6 +1145,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       const m: MethodName = "NFPA 770 Class A/C";
       const nz: NozzleCode = pickDefaultNozzle(m);
       const st: EmitterStyleKey | undefined = coerceStyle(m, nz);
+
       const enc: Enclosure = {
         id: newId("enc"),
         name: `Enclosure ${zone.enclosures.length + 1}`,
@@ -1076,14 +1163,13 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const systems = [...p.systems];
       systems[sidx] = { ...sys, zones };
-
       return { ...p, systems };
     });
   };
 
   const updateSystem: Model["updateSystem"] = (systemId, patch) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
       const systems = [...p.systems];
       systems[sidx] = { ...systems[sidx], ...patch };
@@ -1095,7 +1181,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     systemId,
     patch
   ) => {
-    setProject((p) => {
+    mutateProject((p) => {
       const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
 
@@ -1121,7 +1207,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const changeSystemType: Model["changeSystemType"] = (systemId, type) => {
-    setProject((p) => {
+    mutateProject((p) => {
       const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
 
@@ -1137,16 +1223,15 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         options:
           type === "engineered" ? makeEngineeredOptions() : makePreOptions(),
       };
-
       return { ...p, systems };
     });
   };
 
   const updateZone: Model["updateZone"] = (systemId, zoneId, patch) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
-      const zidx = findZoneIndex(sidx, zoneId);
+      const zidx = p.systems[sidx].zones.findIndex((z) => z.id === zoneId);
       if (zidx < 0) return p;
 
       const zones = [...p.systems[sidx].zones];
@@ -1154,7 +1239,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const systems = [...p.systems];
       systems[sidx] = { ...p.systems[sidx], zones };
-
       return { ...p, systems };
     });
   };
@@ -1165,12 +1249,14 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     eid,
     patch
   ) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
-      const zidx = findZoneIndex(sidx, zoneId);
+      const zidx = p.systems[sidx].zones.findIndex((z) => z.id === zoneId);
       if (zidx < 0) return p;
-      const eidx = findEnclosureIndex(sidx, zidx, eid);
+      const eidx = p.systems[sidx].zones[zidx].enclosures.findIndex(
+        (e) => e.id === eid
+      );
       if (eidx < 0) return p;
 
       const zone = p.systems[sidx].zones[zidx];
@@ -1188,7 +1274,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       // 2) Nozzle changed → ensure style is valid for (method, nozzle)
       if (patch.nozzleCode && patch.nozzleCode !== old.nozzleCode) {
         const m = (next.method as MethodName) ?? (old.method as MethodName);
-        const nz = next.nozzleCode as NozzleCode; // asserted after patch
+        const nz = next.nozzleCode as NozzleCode;
         next.emitterStyle = coerceStyle(m, nz, next.emitterStyle);
       }
 
@@ -1197,7 +1283,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         const m = (next.method as MethodName) ?? (old.method as MethodName);
         const nz =
           (next.nozzleCode as NozzleCode) ?? (old.nozzleCode as NozzleCode);
-        // If the incoming style isn't valid, snap to the first valid style
         next.emitterStyle = coerceStyle(
           m,
           nz,
@@ -1213,47 +1298,59 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const systems = [...p.systems];
       systems[sidx] = { ...p.systems[sidx], zones };
-
       return { ...p, systems };
     });
   };
 
   /* ---------- Remove ---------- */
   const removeSystem: Model["removeSystem"] = (systemId) => {
-    setProject((p) => ({
-      ...p,
-      systems: p.systems.filter((s) => s.id !== systemId),
-    }));
+    mutateProject((p) => {
+      const nextRaw = p.systems.filter((s) => s.id !== systemId);
+      const nextSystems = reindexDefaultNames(nextRaw, "System");
+      return { ...p, systems: nextSystems };
+    });
   };
 
   const removeZone: Model["removeZone"] = (systemId, zoneId) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
+
       const sys = p.systems[sidx];
-      const zones = sys.zones.filter((z) => z.id !== zoneId);
+      const nextRawZones = sys.zones.filter((z) => z.id !== zoneId);
+      const nextZones =
+        sys.type === "engineered"
+          ? reindexDefaultNames(nextRawZones, "Zone")
+          : nextRawZones;
+
       const systems = [...p.systems];
-      systems[sidx] = { ...sys, zones };
+      systems[sidx] = { ...sys, zones: nextZones };
       return { ...p, systems };
     });
   };
 
   const removeEnclosure: Model["removeEnclosure"] = (systemId, zoneId, eid) => {
-    setProject((p) => {
-      const sidx = findSystemIndex(systemId);
+    mutateProject((p) => {
+      const sidx = p.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return p;
-      const zidx = findZoneIndex(sidx, zoneId);
+
+      const zidx = p.systems[sidx].zones.findIndex((z) => z.id === zoneId);
       if (zidx < 0) return p;
 
-      const zone = p.systems[sidx].zones[zidx];
-      const enclosures = zone.enclosures.filter((e) => e.id !== eid);
+      const sys = p.systems[sidx];
+      const zone = sys.zones[zidx];
 
-      const zones = [...p.systems[sidx].zones];
-      zones[zidx] = { ...zone, enclosures };
+      const nextRawEncs = zone.enclosures.filter((e) => e.id !== eid);
+      const nextEncs =
+        sys.type === "engineered"
+          ? reindexDefaultNames(nextRawEncs, "Enclosure")
+          : nextRawEncs;
+
+      const zones = [...sys.zones];
+      zones[zidx] = { ...zone, enclosures: nextEncs };
 
       const systems = [...p.systems];
-      systems[sidx] = { ...p.systems[sidx], zones };
-
+      systems[sidx] = { ...sys, zones };
       return { ...p, systems };
     });
   };
@@ -1272,7 +1369,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const bySystem: EngineeredBomBySystem = collectBOM(p);
     let total = 0;
 
-    // Avoid downlevel iteration: use Object.values + Map.forEach
     Object.values(bySystem).forEach(({ bom }) => {
       bom.forEach((line) => {
         const entry =
@@ -1301,32 +1397,37 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const { project: nextProject, messages: runtime = [] } =
       calculateEngineered(project);
-
     const reconciled = syncPointsFromBOM(nextProject);
 
-    setProject(reconciled);
+    mutateProjectNoDirty(() => reconciled);
 
     const runtimeWithIds = runtime.map((m) => ({ ...m, id: newId("st") }));
     const msgs = [...pre, ...runtimeWithIds];
     setStatus(msgs);
 
     const blocked = msgs.some((m) => m.severity === "error");
-    if (!blocked) {
-      void recomputeProjectListPrice(reconciled);
-    } else {
-      setProjectListPrice(null);
-    }
+    if (!blocked) void recomputeProjectListPrice(reconciled);
+    else setProjectListPrice(null);
+
+    setHasCalculated(!blocked); // ✅ FIX
   };
   const runCalculatePreEngineered: Model["runCalculatePreEngineered"] = () => {
     setStatus([]);
-    const pre = validateProject(project);
 
+    // 0) Apply locked partcodes first (this can mutate effective inputs)
     const locked = applyAllLockedPreEngPartcodes(project);
+
+    // 1) Validate the applied project (NOT the stale one)
+    const pre = validateProject(locked.project);
+
+    // 2) Run calc
     const { project: nextProject, messages: runtime = [] } =
       calculatePreEngineered(locked.project);
 
-    setProject(nextProject);
+    // 3) Update project without marking dirty (calc results are not "user edits")
+    mutateProjectNoDirty(() => nextProject);
 
+    // 4) Merge messages
     const msgs = [
       ...pre,
       ...locked.messages.map((m) => ({ ...m, id: newId("st") })),
@@ -1334,10 +1435,15 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     ];
     setStatus(msgs);
 
+    // 5) Blocked?
     const blocked = msgs.some((m) => m.severity === "error");
     if (!blocked) void recomputeProjectListPrice(nextProject);
     else setProjectListPrice(null);
+
+    // ✅ Only "calculated" if not blocked
+    setHasCalculated(!blocked);
   };
+
   const runCalculateAll: Model["runCalculateAll"] = () => {
     setStatus([]);
 
@@ -1352,8 +1458,10 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const engSynced = syncPointsFromBOM(eng.project);
     const pree = calculatePreEngineered(engSynced);
 
-    setProject(pree.project);
+    // 3) Update final project without marking dirty
+    mutateProjectNoDirty(() => pree.project);
 
+    // 4) Merge messages
     const msgs = [
       ...pre,
       ...applied.messages.map((m) => ({ ...m, id: newId("st") })),
@@ -1362,13 +1470,21 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     ];
     setStatus(msgs);
 
+    // 5) Blocked?
     const blocked = msgs.some((m) => m.severity === "error");
     if (!blocked) void recomputeProjectListPrice(pree.project);
     else setProjectListPrice(null);
+
+    // ✅ Only "calculated" if not blocked
+    setHasCalculated(!blocked);
   };
+
+  // ✅ Partcode apply is an input mutation → markDirty()
   const applyPreEngSystemPartcode = (systemId: string) => {
     const sys = project.systems.find((s) => s.id === systemId);
     if (!sys || sys.type !== "preengineered") return;
+
+    clearStatus({ systemId });
 
     const opts = sys.options as PreEngineeredOptions;
     const rawInput = String(opts.systemPartCode ?? "").trim();
@@ -1411,7 +1527,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const { prePatch, zonePatch, enclosurePatch, formatted } = decoded.decoded;
 
-    setProject((prev) => {
+    mutateProject((prev) => {
       const sidx = prev.systems.findIndex((s) => s.id === systemId);
       if (sidx < 0) return prev;
 
@@ -1423,7 +1539,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
       let nextEnc0: Enclosure = { ...oldEnc0, ...enclosurePatch };
 
-      // Ensure nozzle/style valid even during mapping rollout
       if (!nextEnc0.nozzleCode) {
         const m = nextEnc0.method as MethodName;
         const nz = pickDefaultNozzle(m, { systemType: "preengineered" } as any);
@@ -1453,8 +1568,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         ...oldOpts,
         ...prePatch,
         addOns: mergedAddOns,
-        systemPartCode: formatted, // D1 format immediately
-        systemPartCodeLocked: true, // B locked source-of-truth
+        systemPartCode: formatted,
+        systemPartCodeLocked: true,
         kind: "preengineered",
       };
 
@@ -1469,37 +1584,44 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       text: `System configuration updated from partcode ${formatted}`,
     });
   };
+
   function applyAllLockedPreEngPartcodes(p: Project): {
     project: Project;
     messages: StatusInput[];
   } {
     const messages: StatusInput[] = [];
 
-    const systems = p.systems.map((sys) => {
+    const normalizeLockedSystem = (sys: System): System => {
       if (sys.type !== "preengineered") return sys;
 
       const opts = sys.options as PreEngineeredOptions;
       if (!opts.systemPartCodeLocked) return sys;
 
       const rawInput = String(opts.systemPartCode ?? "").trim();
-      if (!rawInput) {
+
+      const pushInvalid = (message: string) => {
         messages.push(
           statusFromCode(
             "SYS.INVALID_PARTCODE",
             { systemId: sys.id },
-            {
-              message:
-                "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
-            }
+            { message }
           )
+        );
+      };
+
+      if (!rawInput) {
+        pushInvalid(
+          "System partcode is empty. Enter a valid 15-character pre-engineered system code."
         );
         return sys;
       }
 
       const decoded = decodeSystemPartcodeToConfig(rawInput);
+
       if (decoded.ok === false) {
         const { reason, digit } = decoded;
         let message = "Invalid system partcode.";
+
         if (reason === "empty") {
           message =
             "System partcode is empty. Enter a valid 15-character pre-engineered system code.";
@@ -1511,25 +1633,21 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
           message = `Invalid system partcode due to conflicting values at digit(s) [${digit}].`;
         }
 
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            { message }
-          )
-        );
+        pushInvalid(message);
         return sys;
       }
 
       const { prePatch, zonePatch, enclosurePatch, formatted } =
         decoded.decoded;
 
+      // Ensure zone + enclosure exist (pre-eng assumes 1)
       const oldZone = sys.zones[0] ?? makeDefaultPreZone();
       const oldEnc0 = oldZone.enclosures?.[0] ?? makeDefaultPreEnclosure(1);
 
+      // Apply enclosure patch
       let nextEnc0: Enclosure = { ...oldEnc0, ...enclosurePatch };
 
-      // Safety: if decode mapping not complete, enforce valid nozzle/style
+      // Safety: enforce valid nozzle/style even if mapping is partial
       if (!nextEnc0.nozzleCode) {
         const m = nextEnc0.method as MethodName;
         const nz = pickDefaultNozzle(m, { systemType: "preengineered" } as any);
@@ -1543,12 +1661,14 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       }
 
+      // Apply zone patch, preserve other zone props
       const newZone0: Zone = {
         ...oldZone,
         ...zonePatch,
         enclosures: [nextEnc0],
       };
 
+      // Merge addOns (patch addOns should override existing)
       const oldOpts = sys.options as PreEngineeredOptions;
       const mergedAddOns = {
         ...(oldOpts.addOns ?? {}),
@@ -1569,11 +1689,11 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         zones: [newZone0],
         options: newOptions,
       };
-    });
+    };
 
+    const systems = p.systems.map(normalizeLockedSystem);
     return { project: { ...p, systems }, messages };
   }
-
   const hasErrors = status.some((m) => m.severity === "error");
 
   /* ---------- Import/Export ---------- */
@@ -1582,12 +1702,11 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const safeName = (project?.name || "Untitled").replace(/[^\w\-]+/g, "_");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `VortexProject_${safeName}_${stamp}.json`;
-    // Try Electron (saves to Downloads by default), fall back to current web method:
+
     void saveTextFileSmart(filename, JSON.stringify(snap, null, 2), {
       filterJson: true,
     }).then((ok) => {
       if (!ok) {
-        // fallback to your existing browser download
         const blob = new Blob([JSON.stringify(snap, null, 2)], {
           type: "application/json;charset=utf-8",
         });
@@ -1612,7 +1731,14 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!snap?.project || typeof snap.project !== "object") {
         throw new Error("Imported file has no project payload.");
       }
+
+      // ✅ importing is an input mutation → dirty + clear statuses (optional)
+      setStatus([]);
+      setProjectListPrice(null);
+      setHasCalculated(false);
+
       setProject(snap.project as Project);
+
       addStatus({
         severity: "info",
         text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
@@ -1630,7 +1756,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
   const triggerImportFilePicker: Model["triggerImportFilePicker"] =
     async () => {
-      // Try Electron native Open dialog first
       const text = await openTextFileSmart({ filterJson: true });
       if (text) {
         try {
@@ -1638,7 +1763,13 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
           if (!snap?.project || typeof snap.project !== "object") {
             throw new Error("Imported file has no project payload.");
           }
+
+          setStatus([]);
+          setProjectListPrice(null);
+          setHasCalculated(false);
+
           setProject(snap.project as Project);
+
           addStatus({
             severity: "info",
             text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
@@ -1652,7 +1783,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
           // fall through to web picker
         }
       }
-      // Fallback to the hidden <input type=file> (web)
       hiddenInputRef.current?.click();
     };
 
@@ -1683,7 +1813,13 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       const raw = localStorage.getItem("vortex:autosave");
       if (!raw) return;
       const snap = parseSnapshot(raw);
-      if (snap?.project) setProject(snap.project as Project);
+      if (snap?.project) {
+        // ✅ restoring is “dirty” (must re-calc before BOM/submit)
+        setStatus([]);
+        setProjectListPrice(null);
+        setHasCalculated(false);
+        setProject(snap.project as Project);
+      }
     } catch {
       /* ignore bad autosave */
     }
@@ -1692,6 +1828,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const autosaveTimer = useRef<number | null>(null);
   useEffect(() => {
+    if (!autosaveEnabled) return;
+
     if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
     autosaveTimer.current = window.setTimeout(() => {
       try {
@@ -1701,10 +1839,11 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         /* ignore */
       }
     }, 400);
+
     return () => {
       if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
     };
-  }, [project]);
+  }, [project, autosaveEnabled]);
 
   /* ---------- BOM Excel generation ---------- */
   const projectNetPrice = useMemo(() => {
@@ -1715,10 +1854,9 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     return projectListPrice == null ? null : projectListPrice * mult;
   }, [projectListPrice, project.customerMultiplier]);
 
-  // Generate BOM (EXCEL)
   async function generateEngineeredBOM() {
-    // guard: don’t generate if there are blocking errors
-    if (hasErrors) return;
+    // Guard: must have a successful calculation AND no blocking errors
+    if (!hasCalculated || hasErrors) return;
 
     const idx = await ensurePriceIndex();
     const wb = await buildWorkbookForProject({
@@ -1737,12 +1875,10 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const fnameSafe = (project.name || "Project").replace(/[^\w\-]+/g, "_");
     const bytes = new Uint8Array(buffer as ArrayBuffer);
 
-    // Try Electron native Save dialog first
     const saved = await saveBinaryFileSmart(`${fnameSafe}.xlsx`, bytes, {
       filterXlsx: true,
     });
     if (!saved) {
-      // Fallback to browser download (current behavior)
       saveAs(
         new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1758,7 +1894,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       project,
 
       updateProject,
-
       addSystem,
       addZone,
       addEnclosure,
@@ -1782,7 +1917,9 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       addStatus,
       clearStatus,
       runValidate,
+
       hasErrors,
+      hasCalculated, // ✅ expose to UI
 
       exportProjectToFile,
       importProjectFromFile,
@@ -1794,45 +1931,18 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       projectNetPrice,
 
       clearProject,
+
+      setAutosaveEnabled,
+      restoreAutosaveFromRaw,
     }),
     [
       project,
       status,
       hasErrors,
+      hasCalculated,
       priceIndexReady,
       projectListPrice,
       projectNetPrice,
-
-      updateProject,
-
-      addSystem,
-      addZone,
-      addEnclosure,
-
-      updateSystem,
-      updateSystemOptions,
-      changeSystemType,
-      updateZone,
-      updateEnclosure,
-
-      removeSystem,
-      removeZone,
-      removeEnclosure,
-
-      runCalculateEngineered,
-      runCalculatePreEngineered,
-      runCalculateAll,
-
-      addStatus,
-      clearStatus,
-      runValidate,
-
-      exportProjectToFile,
-      importProjectFromFile,
-      triggerImportFilePicker,
-
-      generateEngineeredBOM,
-      clearProject,
     ]
   );
 

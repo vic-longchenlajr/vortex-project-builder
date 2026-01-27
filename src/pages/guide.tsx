@@ -1,19 +1,39 @@
 /* eslint-disable react/jsx-no-undef */
+import React from "react";
 import Head from "next/head";
 import Link from "next/link";
 import Navbar from "@/components/ui/NavBar";
-import styles from "@/styles/guide.module.css"; // reuse global page styles
+import styles from "@/styles/guide.module.css";
 import { ERROR_CODES, codeAnchorId } from "@/core/status/error-codes";
 
 export default function Guide() {
+  const clearBrowserData = React.useCallback(() => {
+    try {
+      // App autosave
+      localStorage.removeItem("vortex:autosave");
+
+      // Tutorial gating key (your tutorial file)
+      localStorage.removeItem("vv_tutorial_seen_v1");
+
+      // Optional: if you implement backup keys later
+      localStorage.removeItem("vortex:tutorial_backup_v1");
+      sessionStorage.removeItem("vortex:tutorial_backup_v1");
+    } catch {
+      /* ignore */
+    }
+
+    alert("Cleared autosave + tutorial state for this tool.");
+  }, []);
+
   return (
     <>
       <Head>
         <title>Victaulic Vortex™ | Guide</title>
+        <link rel="icon" href="/vx.ico" sizes="any" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta
           name="description"
-          content="How to use the Victaulic Vortex Configurator: features & functionality, Project workbook breakdown, design methods, and FAQ."
+          content="How to use the Victaulic Vortex™ Project Configurator: features & functionality, Project workbook breakdown, design methods, and FAQ."
         />
       </Head>
 
@@ -21,20 +41,19 @@ export default function Guide() {
 
       <div className={styles.body}>
         {/* ───────── TABLE OF CONTENTS ───────── */}
-        <section className={`${styles.section} ${styles.light}`}>
+        <section className={`${styles.section} ${styles.dark}`}>
           <h1 className={styles.sectionHeading}>Configurator Guide</h1>
           <p>
-            This guide shows how to use the Victaulic Vortex Configurator
-            end-to-end: set project options, build systems, and{" "}
-            <strong>calculate</strong> results; then{" "}
-            <strong>generate the BOM workbook</strong>,{" "}
-            <strong>import/export</strong> projects for collaboration, and
-            finally <strong>submit</strong> for technical review or ordering. It
-            also outlines design method differences, explains error and warning
-            messages, and maps each output to the Excel workbook so you know
-            exactly what’s driving price and scope.
+            This guide explains how the Victaulic Vortex™ Project Configurator
+            is structured and how to interpret its results. It describes how
+            projects, systems, zones, and enclosures are organized; outlines
+            design method differences; and explains validation messages and
+            calculated outputs.
           </p>
-
+          <p>
+            For step-by-step interaction with the interface, use the
+            in-configurator tutorial.
+          </p>
           {/* Unified Navigator */}
           <nav aria-label="Guide navigation" className={styles.guideNav}>
             {/* Primary CTA */}
@@ -48,16 +67,26 @@ export default function Guide() {
               </div>
             </Link>
 
+            {/* Tutorial (PRIMARY) */}
+            <Link
+              href="/tutorial"
+              className={`${styles.navCard} ${styles.navCardPrimary}`}
+            >
+              <div className={styles.navCardTitle}>Run Tutorial</div>
+              <div className={styles.navCardDesc}>
+                Launch the interactive walkthrough in a temporary workspace.
+                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                  Any existing progress will be restored automatically after the
+                  tutorial.
+                </div>
+              </div>
+            </Link>
+
+            {/* Project Hierarchy (moved) */}
             <a href="#hierarchy" className={styles.navCard}>
               <div className={styles.navCardTitle}>Project Hierarchy</div>
               <div className={styles.navCardDesc}>
                 Understand how Projects organize Systems, Zones, and Enclosures.
-              </div>
-            </a>
-            <a href="#workflow" className={styles.navCard}>
-              <div className={styles.navCardTitle}>Project Workflow</div>
-              <div className={styles.navCardDesc}>
-                Step-by-step walkthrough with annotated screenshots.
               </div>
             </a>
 
@@ -67,12 +96,14 @@ export default function Guide() {
                 NFPA 770, FM Data Centers, FM Turbines & Machine Spaces.
               </div>
             </a>
+
             <a href="#errors" className={styles.navCard}>
               <div className={styles.navCardTitle}>Error Codes</div>
               <div className={styles.navCardDesc}>
                 Validation and calculation errors with resolutions.
               </div>
             </a>
+
             <a href="#workbook" className={styles.navCard}>
               <div className={styles.navCardTitle}>
                 Project Workbook Breakdown
@@ -105,315 +136,105 @@ export default function Guide() {
           </nav>
         </section>
 
-        <section id="hierarchy" className={`${styles.section} ${styles.dark}`}>
+        <section id="hierarchy" className={`${styles.section} ${styles.light}`}>
           <h2 className={styles.sectionHeading}>Project Hierarchy</h2>
+
           <p>
-            A project is the top-level container for all system data. Engineered
-            Systems organize protection into
-            <strong> Zones</strong> that each contain{" "}
+            A <strong>Project</strong> is the top-level container for all
+            configuration data. Projects may include both{" "}
+            <strong>Engineered</strong> and <strong>Pre-Engineered</strong>{" "}
+            systems. Engineered Systems organize protection into{" "}
+            <strong>Zones</strong> that each contain one or more{" "}
             <strong>Enclosures</strong>. Pre-Engineered Systems are intended to
-            be installed to protect a single
-            <strong> Enclosure</strong>.
+            protect a single <strong>Enclosure</strong>.
           </p>
 
-          <div className={styles.kb}>
-            <div className={styles.kbItem}>
-              <strong>System</strong>
-              <span className={styles.kbDash}>—</span>
-              The complete assembly of components—agent storage, distribution,
-              and control equipment—arranged to deliver hybrid media from a
-              common source to one or more zones.
-            </div>
-            <div className={styles.kbItem}>
-              <strong>Zone</strong>
-              <span className={styles.kbDash}>—</span>
-              One or more enclosures or protection areas designated to be
-              protected simultaneously.
-            </div>
-            <div className={styles.kbItem}>
-              <strong>Enclosure</strong>
-              <span className={styles.kbDash}>—</span>A confined or partially
-              confined volume or defined space within which the system is
-              intended to operate.
-            </div>
-          </div>
-
-          <div className={styles.stackWrap}>
-            {/* Project bar spans both columns */}
-            <div
-              className={`${styles.node} ${styles.nodePrimary} ${styles.projectBar}`}
-            >
-              Project
-            </div>
-
-            <div className={styles.stackGrid}>
-              {/* Engineered stack */}
-              <div className={styles.stack}>
-                <div className={`${styles.step} ${styles.stepTop}`}>
-                  <div className={`${styles.node} ${styles.nodeStrong}`}>
-                    Engineered System{" "}
-                    <span className={styles.badge}>[0…n]</span>
-                  </div>
-                </div>
-                <div className={styles.step}>
-                  <div className={styles.node}>
-                    Zone <span className={styles.badge}>[1…n]</span>
-                  </div>
-                </div>
-                <div className={`${styles.step} ${styles.stepBottom}`}>
-                  <div className={styles.node}>
-                    Enclosure <span className={styles.badge}>[1…n]</span>
-                  </div>
+          <div className={styles.hierDiagram}>
+            <div className={styles.hierProjectCard}>
+              <div className={styles.hierProjectHeader}>
+                <div className={styles.hierProjectTitle}>Project</div>
+                <div className={styles.hierProjectMeta}>
+                  Top-level container
                 </div>
               </div>
 
-              {/* Pre-Engineered stack */}
-              <div className={styles.stack}>
-                <div className={`${styles.step} ${styles.stepTop}`}>
-                  <div className={`${styles.node} ${styles.nodeStrong}`}>
-                    Pre-Engineered System{" "}
-                    <span className={styles.badge}>[0…n]</span>
+              <div className={styles.hierProjectGrid}>
+                {/* Engineered */}
+                <div className={styles.hierOuter}>
+                  <div className={styles.hierOuterHeader}>
+                    <div className={styles.hierOuterTitle}>
+                      Engineered System
+                    </div>
+                    <span className={styles.hierCount}>0..n</span>
+                  </div>
+
+                  <div className={styles.hierDef}>
+                    A configurable system that may protect one or more zones
+                    using a shared agent supply.
+                  </div>
+
+                  <div className={styles.hierInner}>
+                    <div className={styles.hierInnerHeader}>
+                      <div className={styles.hierInnerTitle}>Zone</div>
+                      <span className={styles.hierCount}>1..n</span>
+                    </div>
+                    <div className={styles.hierDef}>
+                      A grouping of one or more enclosures protected
+                      simultaneously by a common nitrogen discharge group.
+                    </div>
+                    <div className={styles.hierLeaf}>
+                      <div className={styles.hierLeafHeader}>
+                        <div className={styles.hierLeafTitle}>Enclosure</div>
+                        <span className={styles.hierCount}>1..n</span>
+                      </div>
+
+                      <p className={styles.hierDef}>
+                        A defined or partially confined space within which
+                        system performance is calculated.
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className={`${styles.step} ${styles.stepBottom}`}>
-                  <div className={styles.node}>
-                    Zone/Enclosure <span className={styles.badge}>[1]</span>
+
+                {/* Pre-Engineered */}
+                <div className={styles.hierOuter}>
+                  <div className={styles.hierOuterHeader}>
+                    <div className={styles.hierOuterTitle}>
+                      Pre-Engineered System
+                    </div>
+                    <span className={styles.hierCount}>0..n</span>
                   </div>
+                  <div className={styles.hierDef}>
+                    A standardized system intended to protect a single enclosure
+                    using predefined components and piping rules.
+                  </div>
+                  <div className={styles.hierLeaf}>
+                    <div className={styles.hierLeafHeader}>
+                      <div className={styles.hierLeafTitle}>Enclosure</div>
+                      <span className={styles.hierCount}>1</span>
+                    </div>
+
+                    <p className={styles.hierDef}>
+                      The single protected space used to size and configure the
+                      system.
+                    </p>
+                  </div>{" "}
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section id="workflow" className={`${styles.section} ${styles.light}`}>
-          <h2 className={styles.sectionHeading}>Project Workflow</h2>
-          <p>
-            The configurator follows a left-to-right workflow: set up your
-            project, build systems, calculate, generate the BOM, then export or
-            submit for review.
-          </p>
-
-          {/* ───────── STEP 1: Project Setup ───────── */}
-          <div className={styles.workflowBlock}>
-            <img
-              src="/img/guide/step1.png"
-              alt="Project Setup: Pricing & Project Options"
-              className={styles.workflowImg}
-            />
-            <div className={styles.workflowCaption}>
-              <h3>Project Setup</h3>
-              <ol>
-                <li>
-                  <strong>Pricing Module</strong> — Displays <em>List</em> and{" "}
-                  <em>Net </em>
-                  prices; Net applies your <em>Customer Multiplier</em>.
-                </li>
-                <li>
-                  <strong>Project Options</strong> — Define project metadata so
-                  your order and workbook reflect the correct context.
-                </li>
-                <li>
-                  <strong>Currency</strong> — Selects the appropriate price list
-                  and part-code family (USD → BPCS; EUR/GBP → M3).
-                </li>
-                <li>
-                  <strong>Units</strong> — Switch between Imperial and Metric;
-                  affects inputs, calculations, and workbook formatting.
-                </li>
-                <li>
-                  <strong>Elevation</strong> — Applies the Altitude Correction
-                  Factor (ACF) for nitrogen flow and oxygen calculations.
-                </li>
-                <li>
-                  <strong>Project Builder</strong> — Add an <em>Engineered</em>{" "}
-                  or
-                  <em> Pre-Engineered</em> system to begin configuration.
-                </li>
-                <li>
-                  <strong>Import Project</strong> — Load a saved or shared JSON
-                  file to continue progress or review another configuration.
-                </li>
-              </ol>
-            </div>
-          </div>
-
-          {/* ───────── STEP 2: Engineered — Pre-Calculation ───────── */}
-          <div className={styles.workflowBlock}>
-            <img
-              src="/img/guide/step2.png"
-              alt="Engineered: Pre-Calculation"
-              className={styles.workflowImg}
-            />
-            <div className={styles.workflowCaption}>
-              <h3>Engineered — Pre-Calculation</h3>
-              <ol>
-                <li>
-                  <strong>System Options</strong> — Configure cylinder fill
-                  pressure, panel style, power supply, refill adapter, and other
-                  system-level settings.
-                </li>
-                <li>
-                  <strong>Add-Ons</strong> — Check optional components such as
-                  flexible hoses or explosion-proof transducers. The{" "}
-                  <em>Door Count</em> determines placard and signage quantities.
-                </li>
-                <li>
-                  <strong>Add Zone</strong> — Create a protection group that
-                  will discharge simultaneously.
-                </li>
-                <li>
-                  <strong>Add Enclosure</strong> — Add one row per protected
-                  space.
-                </li>
-                <li>
-                  <strong>Enclosure Input</strong> — Enter the Enclosure Name,
-                  Volume, Temperature, Design Method, Nozzle, and Style. These
-                  determine nozzles, flow cartridges, and nitrogen demand.
-                </li>
-                <li>
-                  <strong>Calculate</strong> — Validate all inputs and compute
-                  nozzle quantity, discharge time, oxygen level, and panel
-                  sizing.
-                </li>
-              </ol>
-            </div>
-          </div>
-
-          {/* ───────── STEP 3: Engineered — Post-Calculation ───────── */}
-          <div className={styles.workflowBlock}>
-            <img
-              src="/img/guide/step3.png"
-              alt="Engineered: Post-Calculation"
-              className={styles.workflowImg}
-            />
-            <div className={styles.workflowCaption}>
-              <h3>Engineered — Post-Calculation</h3>
-              <ol>
-                <li>
-                  <strong>Status</strong> — Resolve all errors before
-                  proceeding; warnings are advisory. For details, see{" "}
-                  <a href="#errors">Error Codes</a>.
-                </li>
-                <li>
-                  <strong>Enclosure Results</strong> — Displays calculated
-                  minimum nozzles, estimated discharge time, and final oxygen
-                  level.
-                </li>
-                <li>
-                  <strong>Zone Results</strong> — Shows total volume, nitrogen
-                  requirement, and minimum total cylinders for the zone.
-                </li>
-                <li>
-                  <strong>Custom Checkbox</strong> — Enable to override
-                  calculated values. Re-run <em>Calculate</em> to refresh
-                  results.
-                </li>
-                <li>
-                  <strong>Generate BOM</strong> — Creates the Excel workbook for
-                  review and ordering. See{" "}
-                  <a href="#workbook">Project Workbook Breakdown</a>.
-                </li>
-                <li>
-                  <strong>Export Project</strong> — Save a JSON snapshot (inputs
-                  + results) at any time for sharing or support.
-                </li>
-                <li>
-                  <strong>Submit Project</strong> — When error-free and a BOM is
-                  generated, submit the workbook to Victaulic Customer Care for
-                  quotation.
-                </li>
-              </ol>
-            </div>
-          </div>
-
-          {/* ───────── STEP 4: Pre-Engineered — Pre-Calculation ───────── */}
-          <div className={styles.workflowBlock}>
-            <img
-              src="/img/guide/step4.png"
-              alt="Pre-Engineered: Pre-Calculation"
-              className={styles.workflowImg}
-            />
-            <div className={styles.workflowCaption}>
-              <h3>Pre-Engineered — Pre-Calculation</h3>
-              <ol>
-                <li>
-                  <strong>System Options</strong> — Choose Design Method, refill
-                  adapter, water tank certifications, and power supply.
-                </li>
-                <li>
-                  <strong>Add-Ons</strong> — Select optional items such as the
-                  explosion-proof pressure transducer.
-                </li>
-                <li>
-                  <strong>Enclosure Input</strong> — Enter Enclosure Name,
-                  Length, Width, Height, Temperature, Design Method, Nozzle, and
-                  Style. These determine nozzle and flow-cartridge selection.
-                </li>
-                <li>
-                  <strong>Calculate</strong> — Performs all pre-engineered
-                  validations and computes nozzles, cylinders, discharge time,
-                  and oxygen level for this single-zone, single-enclosure
-                  system.
-                </li>
-              </ol>
-            </div>
-          </div>
-
-          {/* ───────── STEP 5: Pre-Engineered — Post-Calculation ───────── */}
-          <div className={styles.workflowBlock}>
-            <img
-              src="/img/guide/step5.png"
-              alt="Pre-Engineered: Post-Calculation"
-              className={styles.workflowImg}
-            />
-            <div className={styles.workflowCaption}>
-              <h3>Pre-Engineered — Post-Calculation</h3>
-              <ol>
-                <li>
-                  <strong>Status</strong> — Verify that no errors remain and
-                  review any warnings. For details, see{" "}
-                  <a href="#errors">Error Codes</a>.
-                </li>
-                <li>
-                  <strong>Enclosure Requirements</strong> — Displays maximum and
-                  minimum allowed openings (based on nozzle size and volume)
-                  plus spacing and height limits per pre-engineered approval
-                  tables.
-                </li>
-                <li>
-                  <strong>System Results</strong> — Lists total volume, minimum
-                  nozzles and cylinders, cylinder size @ fill pressure,
-                  estimated discharge time, and final O₂. (USD uses filled 49L
-                  and 80L cylinders for Pre-Engineered systems; non-USD uses
-                  unfilled by default.)
-                </li>
-                <li>
-                  <strong>Custom Checkbox</strong> — Enable to override FACP
-                  counts.
-                </li>
-                <li>
-                  <strong>Generate BOM</strong> — Produces the Excel workbook
-                  including the
-                  <em> Pipe Guidance</em> sheet unique to pre-engineered
-                  systems. See{" "}
-                  <a href="#workbook">Project Workbook Breakdown</a>.
-                </li>
-                <li>
-                  <strong>Export Project</strong> — Save a JSON snapshot (inputs
-                  + results) at any time for collaboration or support.
-                </li>
-                <li>
-                  <strong>Submit Project</strong> — When error-free and a BOM is
-                  generated, submit the workbook to Victaulic Customer Care for
-                  quotation.
-                </li>
-              </ol>
-            </div>
-          </div>
-        </section>
         {/* ───────── METHOD DIFFERENCES ───────── */}
         <section id="methods" className={`${styles.section} ${styles.dark}`}>
           <h2 className={styles.sectionHeading}>Design Methods</h2>
+          <p>
+            Design Methods define the application type, hazard classification,
+            and approval basis used to size and configure a Victaulic Vortex™
+            system. Selecting the correct design method is a critical first
+            step, as it determines which inputs, limits, and system options are
+            applicable for a given enclosure.
+          </p>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
@@ -552,7 +373,7 @@ export default function Guide() {
         <section id="workbook" className={`${styles.section} ${styles.dark}`}>
           <h2 className={styles.sectionHeading}>Project Workbook Breakdown</h2>
           <p>
-            When you export a project, the generated Excel workbook contains the
+            When you save a project, the generated Excel workbook contains the
             following sheets:
           </p>
 
@@ -645,17 +466,19 @@ export default function Guide() {
           <div className={styles.faqGrid}>
             {/* ── Calculations & Technical ── */}
             <div id="faq-tech" className={styles.faqGroup}>
-              <h3 className={styles.faqGroupTitle}>Calculations & Technical</h3>
+              <h3 className={styles.faqGroupTitle}>
+                Calculations &amp; Technical
+              </h3>
 
               <details className={styles.faqItem} open>
                 <summary>How do Project Options affect my results?</summary>
                 <div className={styles.faqBody}>
-                  Project Options define project metadata and adjust calculation
-                  inputs to your regional and environmental parameters. Currency
-                  sets pricing and part-code systems; Units switch between
-                  imperial and metric; and Elevation applies the Altitude
-                  Correction Factor (ACF) to ensure accurate oxygen and flow
-                  results.
+                  Project Options define project metadata and calculation
+                  context. Currency determines pricing and part-code systems;
+                  Units control whether results are shown in imperial or metric
+                  values; and Project Elevation applies the Altitude Correction
+                  Factor (ACF), which affects calculated oxygen concentration
+                  and nitrogen flow.
                 </div>
               </details>
 
@@ -669,7 +492,8 @@ export default function Guide() {
                   <ul style={{ marginTop: 6 }}>
                     <li>
                       FM Data Centers are limited to a maximum volume of 31,350
-                      ft<sup>3</sup> / 888 m<sup>3</sup>
+                      ft
+                      <sup>3</sup> / 888 m<sup>3</sup>
                     </li>
                     <li>
                       FM Turbines / Machine Spaces are limited to a maximum
@@ -688,23 +512,23 @@ export default function Guide() {
                   What determines my available nozzle selections?
                 </summary>
                 <div className={styles.faqBody}>
-                  Nozzle options are determined by the selected Design Method.
-                  Each method enables a specific set of nozzle styles based on
-                  the system’s application type and approval category.
+                  Available nozzle selections are determined by the selected
+                  Design Method. Each design method permits a specific set of
+                  nozzle types and styles based on application intent and
+                  applicable approvals.
                 </div>
               </details>
 
               <details className={styles.faqItem}>
                 <summary>What is the Rundown Time used for?</summary>
                 <div className={styles.faqBody}>
-                  “Rundown Time” refers to the additional discharge time
-                  required to be added to the minimum design discharge time for
-                  <strong> FM Turbine </strong> and
-                  <strong> FM Machine Spaces </strong>design methods. The
-                  Rundown Time is the required amount of time it takes for the
-                  turbine to come to a complete stop, or the amount of discharge
-                  time required to bring the present fuels and surfaces below
-                  the auto-ignition temperature of the present fuels.
+                  Rundown Time is an additional discharge time applied to{" "}
+                  <strong>FM Turbine</strong> and{" "}
+                  <strong>FM Machine Spaces</strong> design methods. The Rundown
+                  Time is the required amount of time it takes for the turbine
+                  to come to a complete stop, or the amount of discharge time
+                  required to bring the present fuels and surfaces below the
+                  auto-ignition temperature of the present fuels.
                 </div>
               </details>
 
@@ -727,21 +551,21 @@ export default function Guide() {
                 <div className={styles.faqBody}>
                   <ul>
                     <li>
-                      <strong>Victaulic Vortex Engineered Systems </strong>allow
-                      for the custom design of large-scale, multi zone, and
-                      multi-enclosure systems protecting multiple types of
-                      hazards using a common agent source.
+                      <strong>Victaulic Vortex™ Engineered Systems </strong>
+                      support custom-designed, multi-zone and multi-enclosure
+                      configurations using a shared agent supply.
                     </li>
                     <li>
-                      <strong>Victaulic Vortex Pre-Engineered Systems </strong>
-                      provide the ability to specify cost-efficient,
-                      space-efficient, small and medium-scale systems quickly,
-                      and easily, without the need to perform hydraulic
-                      calculations by following pre-engineered piping rules.
+                      <strong>
+                        Victaulic Vortex™ Pre-Engineered Systems{" "}
+                      </strong>
+                      support standardized, single-enclosure applications using
+                      predefined piping rules without hydraulic calculations.
                     </li>
                   </ul>
                 </div>
               </details>
+
               <details className={styles.faqItem}>
                 <summary>
                   How is the water tank/number of cylinders determined for a
@@ -762,13 +586,13 @@ export default function Guide() {
               <h3 className={styles.faqGroupTitle}>Workflow</h3>
 
               <details className={styles.faqItem}>
-                <summary>How can I save, import, or share my project?</summary>
+                <summary>How can I save, load, or share my project?</summary>
                 <div className={styles.faqBody}>
-                  Use <em>Export Project</em> to download a JSON file containing
-                  all project inputs and results. This file can be shared (e.g.,
-                  via email) and restored using <em>Import Project</em>. Note
-                  that exports always capture the project’s current state — even
-                  if errors are present — to help with troubleshooting or
+                  Use <em>Save</em> to download a JSON file containing all
+                  project inputs and results. This file can be shared (e.g., via
+                  email) and restored using <em>Load</em>. Note that saved
+                  projects always capture the configurator's current state —
+                  even if errors are present — to help with troubleshooting or
                   support review.
                 </div>
               </details>
@@ -794,7 +618,7 @@ export default function Guide() {
                   BOM generation.
                   <strong> Warnings</strong> provide advisory information (e.g.,
                   low O₂ levels or large tank sizes) but do not block
-                  calculation or export.
+                  calculation or save.
                 </div>
               </details>
 
@@ -810,7 +634,7 @@ export default function Guide() {
 
               {/* ── Review & Ordering ── */}
               <br />
-              <h3 className={styles.faqGroupTitle}>Review & Ordering</h3>
+              <h3 className={styles.faqGroupTitle}>Review &amp; Ordering</h3>
 
               <details className={styles.faqItem}>
                 <summary>
@@ -827,15 +651,14 @@ export default function Guide() {
               <details className={styles.faqItem}>
                 <summary>Can I manually override calculated values?</summary>
                 <div className={styles.faqBody}>
-                  By checking the box adjacent to the nozzle and cylinder
-                  quantities, the user can manually override the calculated
-                  values and recalculate the system based on these inputs.
-                  Additionally, the user can edit the calculated primaries,
-                  double stacked rack hoses, adjacent rack hoses, and battery
-                  backups by enabling "Edit Values" in
-                  <strong> System Options</strong>. Custom configurations will
-                  be denoted in the status bar as well as the project
-                  workbook.{" "}
+                  Calculated nozzle and cylinder quantities may be manually
+                  overridden by enabling the override control adjacent to each
+                  value and recalculating the system. Additional calculated
+                  items, such as hose counts and battery backups, may be edited
+                  by enabling <em>Edit Values</em> in{" "}
+                  <strong>System Options</strong>. Custom overrides are flagged
+                  in the Status Console and documented in the exported project
+                  workbook.
                 </div>
               </details>
             </div>
@@ -996,7 +819,9 @@ export default function Guide() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.1.1</div>
+          <div className={styles.footer}>
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+          </div>
         </section>
       </div>
     </>

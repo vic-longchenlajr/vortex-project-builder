@@ -11,6 +11,8 @@ export type ErrorCode =
   | "SYS.DUPLICATE_NAME"
   | "SYS.TANK_CAPACITY"
   | "SYS.INVALID_PARTCODE"
+  | "SYS.BULK_TUBES_EXCLUDED"
+  | "SYS.RUNDOWN_TIME_UNUSED"
   | "ZONE.MISSING_NAME"
   | "ZONE.INVALID_CHARS"
   | "ZONE.NO_ENCLOSURES"
@@ -32,6 +34,8 @@ export type ErrorCode =
   | "ENC.FM_VOLUME_LIMIT"
   | "ENC.CUSTOM_NOZZLES"
   | "ENC.NFPA_MAX_DISCHARGE"
+  | "ENC.NFPA_LOW_DISCHARGE"
+  | "ENC.FMDC_MAX_DISCHARGE"
   | "ENC.FMDC_MIN_DISCHARGE"
   | "ENC.N2_NOT_MET"
   | "ENC.CYL_LIMIT"
@@ -140,7 +144,30 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
     resolution:
       "Verify the system partcode against the pre-engineered catalog rules or unlock the field and let the configurator generate a code.",
   },
-
+  "SYS.BULK_TUBES_EXCLUDED": {
+    severity: "warn",
+    title: "Bulk tubes not included in BOM or pricing",
+    appearsWhen: "Bulk tubes are enabled",
+    meaning:
+      "Bulk tube nitrogen storage is handled outside of the standard BOM and pricing workflow and is not automatically included in generated outputs.",
+    message: () =>
+      "Bulk tubes are not included in the BOM or pricing. Complete the Bulk Tube Order Form (SF-37) for final pricing and ordering.",
+    resolution:
+      "Download and complete the Bulk Tube Order Form (SF-37) and submit it separately for pricing and ordering.",
+  },
+  "SYS.RUNDOWN_TIME_UNUSED": {
+    severity: "warn",
+    title:
+      "Rundown time is only in effect for FM Machine Spaces/Turbines design methods.",
+    appearsWhen:
+      "A rundown time is entered but the system has no enclosures using the FM Machine Spaces/Turbines method.",
+    meaning:
+      "Rundown Time is only applicable to FM Machine Spaces/Turbines designs. For other design methods, this field has no effect on the calculation.",
+    message: () =>
+      "Rundown Time is only active for FM Machine Spaces/Turbines designs.",
+    resolution:
+      "Either change at least one enclosure to FM Machine Spaces/Turbines or set Rundown Time to 0.",
+  },
   // ---------- Zone ----------
   "ZONE.MISSING_NAME": {
     severity: "error",
@@ -310,12 +337,12 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
   },
   "ENC.FM_VOLUME_LIMIT": {
     severity: "error",
-    title: "FM Turbines/Machine Spaces volume exceeds limit",
+    title: "FM Machine Spaces/Turbines volume exceeds limit",
     appearsWhen: "On Validate",
     meaning:
-      "The enclosure volume exceeds the FM Turbines/Machine Spaces limit.",
+      "The enclosure volume exceeds the FM Machine Spaces/Turbines Spaces limit.",
     message: () =>
-      "Volume for FM Turbines/FM Machine Spaces may not exceed 127,525 ft³ (3,611.1 m³)",
+      "Volume for FM Machine Spaces/Turbines Spaces may not exceed 127,525 ft³ (3,611.1 m³)",
     resolution: "Divide the enclosure or adjust the design method.",
   },
   "ENC.CUSTOM_NOZZLES": {
@@ -337,6 +364,29 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
       `Estimated discharge time ${p?.t_est ?? "?"} min exceeds 3.0 min for "${p?.name ?? "?"}". Increase nozzles or nitrogen flow`,
     resolution: "Increase nozzles or select a higher-flow nozzle.",
   },
+  "ENC.NFPA_LOW_DISCHARGE": {
+    severity: "warn",
+    title: "Discharge time is very short",
+    appearsWhen: "On Calculate",
+    meaning:
+      "Estimated discharge time is below 2.1 minutes for NFPA methods. This may indicate nozzle flow is higher than needed.",
+    message: (p) =>
+      `Estimated discharge time ${p?.t_est ?? "?"} min is below 2.1 min for "${p?.name ?? "?"}". Consider a smaller nozzle or lower operating pressure to reduce flow`,
+    resolution:
+      "Consider selecting a smaller nozzle or a lower operating pressure to increase discharge time.",
+  },
+
+  "ENC.FMDC_MAX_DISCHARGE": {
+    severity: "warn",
+    title: "Discharge time exceeds FM Data Centers baseline",
+    appearsWhen: "On Calculate",
+    meaning:
+      "Estimated discharge time is greater than 3.5 minutes for FM Data Centers.",
+    message: (p) =>
+      `Estimated discharge time ${p?.t_est ?? "?"} min exceeds 3.5 min for "${p?.name ?? "?"}". Increase nozzles or nitrogen flow`,
+    resolution: "Increase nozzles or select a higher-flow nozzle.",
+  },
+
   "ENC.FMDC_MIN_DISCHARGE": {
     severity: "error",
     title: "FM Data Centers minimum discharge time not met",

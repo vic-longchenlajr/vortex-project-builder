@@ -1,7 +1,7 @@
 // src/components/ui/NavBar.tsx
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
 import styles from "@/styles/navbar.module.css";
@@ -25,6 +25,7 @@ export default function NavBar() {
   const { pathname } = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [compact, setCompact] = useState(false); // optional: shrink on scroll
+  const navRef = useRef<HTMLElement | null>(null);
 
   // Optional: shrink nav after 24px scroll
   useEffect(() => {
@@ -34,8 +35,34 @@ export default function NavBar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const set = () => {
+      const h = nav.getBoundingClientRect().height;
+      document.documentElement.style.setProperty("--nav-height", `${h}px`);
+    };
+
+    set();
+
+    // tracks image/font/compact changes automatically
+    const ro = new ResizeObserver(set);
+    ro.observe(nav);
+
+    window.addEventListener("resize", set);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", set);
+    };
+  }, []);
+
   return (
-    <nav className={clsx(styles.navBar, compact && styles.compact)}>
+    <nav
+      ref={navRef}
+      className={clsx(styles.navBar, compact && styles.compact)}
+      data-nav="1"
+    >
       {/* Logo */}
       <div className={styles.navLogo}>
         <Link href="/" aria-label="Go to Home">
@@ -74,6 +101,18 @@ export default function NavBar() {
           role="menuitem"
         >
           Vortex Portal
+          <span className={styles.extIcon} aria-hidden>
+            ↗
+          </span>
+        </a>
+        <a
+          href="https://www.victaulic.com/"
+          className={styles.navTitle}
+          target="_blank"
+          rel="noopener noreferrer"
+          role="menuitem"
+        >
+          Victaulic
           <span className={styles.extIcon} aria-hidden>
             ↗
           </span>
@@ -118,6 +157,18 @@ export default function NavBar() {
           onClick={() => setMenuOpen(false)}
         >
           Vortex Portal{" "}
+          <span className={styles.extIcon} aria-hidden>
+            ↗
+          </span>
+        </a>
+        <a
+          href="https://www.victaulic.com/"
+          className={styles.mobileItem}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setMenuOpen(false)}
+        >
+          Victaulic
           <span className={styles.extIcon} aria-hidden>
             ↗
           </span>

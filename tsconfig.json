@@ -16,7 +16,7 @@
     "jsx": "preserve",
     "incremental": true,
     "baseUrl": ".",
-
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["src/*"],
       "@/components/*": ["src/components/*"],

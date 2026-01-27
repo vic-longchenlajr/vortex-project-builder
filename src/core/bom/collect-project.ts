@@ -594,7 +594,7 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
 
         // 1) Signage / placards
 
-        if (enc.method === "FM Machine Spaces") {
+        if (enc.method === "FM Machine Spaces/Turbines") {
           add(bom, __placard_int_zone, opts.addOns.doorCount, {
             zoneId: zone.id,
             zoneName: zone.name,

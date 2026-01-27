@@ -35,8 +35,7 @@ const PREENG_NOZZLE_WHITELIST: Record<MethodName, NozzleCode[]> = {
   "NFPA 770 Class A/C": ["5850", "5825", "3850", "3825"],
   "NFPA 770 Class B": ["1250", "1225", "3850", "3825"],
   "FM Data Centers": ["5850", "3850"],
-  "FM Turbines": [],
-  "FM Machine Spaces": [],
+  "FM Machine Spaces/Turbines": [],
 };
 
 // Allowed styles for each allowed PRE-ENG nozzle
@@ -60,8 +59,7 @@ const PREENG_STYLE_WHITELIST: Record<
     "5850": ["escutcheon-stainless"], // 5/8" Cavity @ 50
     "3850": ["escutcheon-stainless"], // 3/8" Cavity @ 50
   },
-  "FM Turbines": {},
-  "FM Machine Spaces": {},
+  "FM Machine Spaces/Turbines": {},
 };
 
 // helper
@@ -313,19 +311,7 @@ export const emitterConfigMap: any = {
       pe_code: "B",
     },
   },
-  "FM Machine Spaces": {
-    "1225": {
-      q_n2: 150,
-      op_psi: 25,
-      q_water: 1.06,
-      f_cart: __flow_cartridge_106,
-      e_label: '1/2" Dome Foil @ 25 PSI',
-      e_style: {
-        "standard-brass": __12_emitter_dom_br,
-      },
-    },
-  },
-  "FM Turbines": {
+  "FM Machine Spaces/Turbines": {
     "1225": {
       q_n2: 150,
       op_psi: 25,
@@ -343,8 +329,7 @@ export type MethodName =
   | "NFPA 770 Class A/C"
   | "NFPA 770 Class B"
   | "FM Data Centers"
-  | "FM Turbines"
-  | "FM Machine Spaces";
+  | "FM Machine Spaces/Turbines";
 
 export type NozzleCode = string; // e.g. "5825"
 
@@ -418,8 +403,7 @@ export function pickDefaultNozzle(
     "NFPA 770 Class A/C": "5825",
     "NFPA 770 Class B": "1225",
     "FM Data Centers": "3850",
-    "FM Turbines": "1225",
-    "FM Machine Spaces": "1225",
+    "FM Machine Spaces/Turbines": "1225",
   };
   const preferred = defaults[method];
   const exists = !!emitterConfigMap[method]?.[preferred];

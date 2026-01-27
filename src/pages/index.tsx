@@ -11,6 +11,7 @@ export default function Home() {
       <Head>
         <title>Victaulic Vortex™ | Home</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" href="/vx.ico" sizes="any" />
       </Head>
 
       <Navbar />
@@ -22,19 +23,17 @@ export default function Home() {
           <div className={styles.heroInner}>
             <div className={styles.heroCopy}>
               <h1 className={styles.heroTitle}>
-                DESIGN, ESTIMATE &amp; ORDER
+                DESIGN, ESTIMATE, AND ORDER
                 <br />
                 IN ONE WORKFLOW
               </h1>
+
               <p className={styles.heroSub}>
-                Configure <strong>engineered</strong> and{" "}
-                <strong>pre-engineered</strong> Victaulic Vortex™ systems,{" "}
-                calculate performance results, generate a complete{" "}
-                <strong>BOM workbook</strong>, and use{" "}
-                <strong>import/export</strong> to save or share project
-                data—then <strong>submit for review or ordering</strong> in one
-                streamlined process.
+                A unified configurator for engineered and pre-engineered
+                Victaulic Vortex™ systems, built around approved design
+                methodologies and validation rules.
               </p>
+
               <div className={styles.ctaRow}>
                 <Link href="/configurator" className={styles.btnPrimary}>
                   Open Configurator
@@ -57,6 +56,7 @@ export default function Home() {
           </div>
           <div className={styles.heroEdge} />
         </section>
+
         {/* ───────── CORE CAPABILITIES (light) ───────── */}
         <section
           id="learn-more"
@@ -66,32 +66,34 @@ export default function Home() {
 
           <div className={styles.cardGrid}>
             <article className={styles.card}>
-              <h3>Design & Calculate</h3>
+              <h3>Design &amp; Calculate</h3>
               <p>
-                Build systems with zones and enclosures, select compatible
-                nozzles and styles, and compute nozzle counts, discharge time,
-                oxygen levels, and panel sizing—all with method-specific rules
-                for NFPA 770, FM Data Centers, and FM Turbines/Machine Spaces.
+                Structure systems by zone and enclosure, apply the appropriate
+                design method, and calculate nozzle quantities, estimated design
+                discharge time, oxygen concentration, and panel sizing. All
+                calculations follow method-specific rules for NFPA 770, FM Data
+                Centers, and FM Turbines and Machine Spaces.
               </p>
             </article>
 
             <article className={styles.card}>
-              <h3>Validate & Export</h3>
+              <h3>Validate &amp; Export</h3>
               <p>
-                Built-in validation flags incompatible pressures, design
-                mismatches, and spacing violations before you export. Generate a
-                polished Excel workbook with grouped BOM by zone/enclosure,
-                warnings, and monitor/release points—with live pricing.
+                Built-in validation evaluates project structure, design method
+                compatibility, and system performance prior to export. Generate
+                an Excel workbook with zone- and enclosure-grouped bills of
+                material, warnings, monitor and release points, and live
+                pricing.
               </p>
             </article>
 
             <article className={styles.card}>
-              <h3>Collaborate & Submit</h3>
+              <h3>Collaborate &amp; Submit</h3>
               <p>
-                Save and resume progress with project import/export for sharing
-                and collaboration. When error-free, submit your complete
-                configuration and BOM directly to Victaulic Customer Care for
-                technical review and quotation.
+                Use project load and save to share configurations and support
+                collaboration across teams. Once validation is complete, submit
+                the full configuration and bill of materials to Victaulic
+                Customer Care for technical review and quotation.
               </p>
             </article>
           </div>
@@ -100,46 +102,54 @@ export default function Home() {
         {/* ───────── DESIGN WITH CONFIDENCE (dark) ───────── */}
         <section className={`${styles.section} ${styles.dark}`}>
           <h2 className={styles.sectionHeading}>Design with Confidence</h2>
+
           <div className={styles.split}>
             <div className={styles.splitCol}>
               <p>
-                The Victaulic Vortex Configurator unifies{" "}
-                <strong>engineered</strong> and <strong>pre-engineered</strong>{" "}
-                workflows into a single experience. Define zones and enclosures,
-                apply the appropriate design method, and let the configurator
-                guide nozzle selection, discharge timing, oxygen prediction, and
-                panel requirements.
+                The Victaulic Vortex Configurator supports engineered and
+                pre-engineered systems within a single, structured design
+                environment. Systems are organized by zone and enclosure, with
+                calculations and constraints driven by the selected design
+                method.
               </p>
+
               <p>
-                Use <strong>Import/Export</strong> to save progress, clone
-                scenarios, or collaborate with Application Engineering for
-                support. Every output maps to specifications, ensuring your
-                design meets all applicable codes, standards, and approvals.
+                Throughout the configuration process, the configurator applies
+                design guardrails that reflect applicable standards and approval
+                requirements. Validation is applied at the project, system,
+                zone, and enclosure levels to help identify incompatible
+                configurations and performance limitations before designs are
+                exported or submitted for review.
               </p>
             </div>
+
             <div className={styles.splitCol}>
               <div className={styles.bulletColumns}>
                 <ul className={styles.bullets}>
-                  <li>NFPA 770 Class A/C and Class B</li>
-                  <li>FM Data Centers approval</li>
-                  <li>FM Turbines & Machine Spaces</li>
-                  <li>Pre-Engineered systems</li>
-                  <li>Zone-based results at a glance</li>
+                  <li>NFPA 770 Class A/C and Class B design methods</li>
+                  <li>FM Data Centers approval criteria</li>
+                  <li>FM Turbines and Machine Spaces requirements</li>
+                  <li>Pre-engineered system limitations and applicability</li>
+                  <li>Zone- and enclosure-based system structure</li>
                 </ul>
+
                 <ul className={styles.bullets}>
-                  <li>Panel sizing per zone</li>
-                  <li>Oxygen & discharge time calcs</li>
-                  <li>Water tank & accessory add-ons</li>
-                  <li>Validation: pressures & spacing</li>
-                  <li>Pipe guidance for pre-engineered</li>
+                  <li>Discharge group–based panel sizing</li>
+                  <li>
+                    Estimated design discharge time and oxygen concentration
+                  </li>
+                  <li>Nitrogen supply and capacity sufficiency</li>
+                  <li>Pressure, spacing, and component compatibility</li>
+                  <li>Pre-engineered nozzle and piping layout constraints</li>
                 </ul>
               </div>
             </div>
           </div>
         </section>
-        {/* ───────── CONTACT & SUPPORT (black) ───────── */}
+
+        {/* ───────── CONTACT & SUPPORT (light) ───────── */}
         <section className={`${styles.section} ${styles.light}`}>
-          <h2 className={styles.sectionHeading}>Contact & Support</h2>
+          <h2 className={styles.sectionHeading}>Contact &amp; Support</h2>
 
           <div className={styles.contactGrid}>
             <div>
@@ -184,7 +194,9 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={styles.footer}>v2.1.1</div>
+          <div className={styles.footer}>
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
+          </div>
         </section>
       </div>
     </>

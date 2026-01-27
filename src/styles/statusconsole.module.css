@@ -14,7 +14,7 @@
 }
 
 .pill {
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 4px 8px;
   font-weight: 700;
   display: inline-flex;
@@ -23,18 +23,21 @@
 }
 
 .pillError {
-  background: #ef4444;
-  color: #ffffff;
+  background: rgba(239, 68, 68, 0.12); /* red-500 @ 12% */
+  border: 1px solid #ef4444;
+  color: #991b1b; /* red-700 */
 }
 
 .pillWarn {
-  background: #f59e0b;
-  color: #111827;
+  border: 1px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.14); /* amber-500 @ 14% */
+  color: #92400e; /* amber-800 */
 }
 
 .pillInfo {
-  background: #3b82f6;
-  color: #ffffff;
+  background: rgba(59, 130, 246, 0.12); /* blue-500 @ 12% */
+  border: 1px solid #3b82f6;
+  color: #1e40af; /* blue-800 */
 }
 
 .empty {
@@ -94,8 +97,6 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  /* key: in sticky right column, restrict by remaining viewport */
-  /* max-height: calc(100vh - var(--sticky-offset, 80px) - 32px); */
 }
 
 .statusConsoleWrap {
@@ -120,7 +121,23 @@
   border: 1px solid #e3e6ef;
   border-radius: 10px;
   padding: 12px;
-  background: #fff;
+  background: var(--surface-muted);
   margin-bottom: 16px;
   box-shadow: var(--shadow-1);
+}
+.itemClickable {
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 160ms ease;
+}
+
+.itemClickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.itemClickable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }

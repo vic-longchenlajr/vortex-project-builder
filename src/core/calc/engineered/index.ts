@@ -22,28 +22,6 @@ import type { Codes } from "@/core/catalog/parts.constants";
 import { statusFromCode } from "@/core/status/error-codes";
 
 /** ─────────────────────────────────────────────────────────────
- *  OVERVIEW
- *  ─────────────────────────────────────────────────────────────
- *  This module computes engineered-system design outputs for Vortex:
- *   • Per-enclosure forward-flow requirements (NFPA 770 A/C & B)
- *   • Legacy sizing paths (FM families)
- *   • Cylinder counts, panel sizing (now per operating pressure), water needs
- *   • System-level water tank selection (strict cert), FACP estimate totals
- *   • Aggregated system totals for UI
- *
- *  Flow:
- *   calculateEngineered(project)
- *     → calcSystem_TotalFloodNFPA(system)
- *       → calcZone_* (forward for A/C & B; legacy for others)
- *         → per-enclosure rows → cylinders → O2 → water/tank → panel sizing
- *       → system-level: tank pick, estimates, FACP points, totals
- *
- *  Notes:
- *   - “Panel groups by pressure” is supported: one panel group per unique op PSI
- *     inside a zone so we don’t mix different pressures on a single panel set.
- */
-
-/** ─────────────────────────────────────────────────────────────
  *  CONSTANTS & SMALL HELPERS
  *  ────────────────────────────────────────────────────────────*/
 type Num = number;
@@ -58,8 +36,7 @@ const FLOODING_FACTOR: Record<Enclosure["method"], Num> = {
   "NFPA 770 Class A/C": 0.375,
   "NFPA 770 Class B": 0.375,
   "FM Data Centers": 0.375,
-  "FM Turbines": 0.375,
-  "FM Machine Spaces": 0.375,
+  "FM Machine Spaces/Turbines": 0.375,
 };
 
 // Altitude correction factors (UI uses string key)
@@ -143,9 +120,16 @@ function formatPsiList(psis: number[]) {
   return unique.map((p) => `${p} psi`).join(", ");
 }
 
-// Rounding helpers (ceil-based)
+// Rounding helpers
 const round3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+function ceilToDecimals(n: number, decimals: number) {
+  if (!(n > 0)) return 0;
+  const f = 10 ** decimals;
+  return Math.ceil(n * f) / f;
+}
+const ceil2 = (n: number) => ceilToDecimals(n, 2);
 
 export function volToFt3(project: Project, vol: number): number {
   return project.units === "metric" ? vol * FT3_PER_M3 : vol;
@@ -156,22 +140,16 @@ export function tempToKelvin(project: Project, tInput: number): number {
     : (tInput - 32) * (5 / 9) + 273.15;
 }
 
-// Cylinder caps depend on FM T/M/S vs others + system fill-pressure
-function getCylinderCaps(method: Enclosure["method"], fill: string) {
-  const isFMTMS = method === "FM Turbines" || method === "FM Machine Spaces";
-  const table = isFMTMS ? CYL_CAP_FMTMS : CYL_CAP_DEFAULT;
-  return table[fill] ?? table["3000 PSI/206.8 BAR"];
-}
 function getBulkTubeCapacityPerTubeSCF(sys: System): number {
   const opts = asEngineeredOptions(sys);
   const cap = Number(opts.bulkTubeNitrogenSCF);
   return Number.isFinite(cap) && cap > 0 ? cap : 0;
 }
-
 function minBulkTubesRequired(requiredSCF: number, capPerTube: number): number {
   if (!(requiredSCF > 0) || !(capPerTube > 0)) return 0;
   return Math.max(1, Math.ceil(requiredSCF / capPerTube));
 }
+
 export function asEngineeredOptions(sys: System): EngineeredOptions {
   if (sys.options.kind !== "engineered") {
     throw new Error("Expected engineered options for engineered calc");
@@ -182,6 +160,31 @@ function pushNote(enc: any, note: string) {
   if (!note) return;
   const arr = Array.isArray(enc.notes) ? enc.notes : (enc.notes = []);
   if (!arr.includes(note)) arr.push(note);
+}
+
+/** ─────────────────────────────────────────────────────────────
+ *  METHOD FAMILIES (NEW)
+ *  ────────────────────────────────────────────────────────────*/
+type MethodFamily = "NFPA" | "FMDC" | "FMTMS";
+
+function methodFamily(m: Enclosure["method"]): MethodFamily {
+  if (m === "NFPA 770 Class A/C" || m === "NFPA 770 Class B") return "NFPA";
+  if (m === "FM Data Centers") return "FMDC";
+  // Merge Turbines + Machine Spaces as one family
+  return "FMTMS";
+}
+
+function designTimeMinForFamily(sys: System, fam: MethodFamily): number {
+  const opts = asEngineeredOptions(sys);
+  if (fam === "NFPA") return 3;
+  if (fam === "FMDC") return 3.5;
+  // FMTMS: both are now 10 + rundown
+  return 10 + (opts.rundownTimeMin || 0);
+}
+
+function cylinderCapsForFamily(fam: MethodFamily, fill: string) {
+  const table = fam === "FMTMS" ? CYL_CAP_FMTMS : CYL_CAP_DEFAULT;
+  return table[fill] ?? table["3000 PSI/206.8 BAR"];
 }
 
 /** ─────────────────────────────────────────────────────────────
@@ -207,7 +210,6 @@ function estimateFMTMSEmitters(project: Project, enc: Enclosure): number {
   return Math.max(1, Math.ceil(V / highFactor));
 }
 
-// Nozzle datasheet queries from emitter catalog
 export function getNozzleFlowSCFM(enc: Enclosure): number {
   try {
     const methodMap = (emitterConfigMap as any)[enc.method];
@@ -239,7 +241,6 @@ function getNozzleOpPSI(enc: Enclosure): number {
   }
 }
 
-// Oxygen percentage after N2 delivery for an enclosure
 export function computeO2Percent({
   Vn2_scf,
   Venc_ft3,
@@ -265,8 +266,6 @@ function useUserFor(sys: System, field: EstKey): boolean {
   const o: any = sys.options || {};
   return !!(o._editEstimates && o._editEstimates[field]);
 }
-
-// Persist computed values unless user edited that specific estimate
 function persistEditable(
   userValue: unknown,
   computed: number,
@@ -284,7 +283,6 @@ function persistEditable(
  *  ────────────────────────────────────────────────────────────*/
 type FacpTotals = { supervisory: number; alarm: number; releasing: number };
 
-// Rough point counts from design selections (panels, primaries, batteries, tank)
 function estimateFacpTotalsFromDesign(params: {
   sys: System;
   zonesUsed: Zone[];
@@ -312,28 +310,21 @@ function estimateFacpTotalsFromDesign(params: {
   let alarm = 0;
   let releasing = 0;
 
-  // Base panel points
-  supervisory += totalPanels; // Panel Fault
-  alarm += totalPanels; // Panel Discharge
-  if (panelStyle === "dc") releasing += totalPanels; // ARV contact on DC style
+  supervisory += totalPanels;
+  alarm += totalPanels;
+  if (panelStyle === "dc") releasing += totalPanels;
 
-  // Primary release assemblies
   const prim = Math.max(0, primaries);
   const bat = Math.max(0, batteries);
-  supervisory += prim * 2; // coil tamper + low pressure
-  releasing += prim * 1; // solenoid
+  supervisory += prim * 2;
+  releasing += prim * 1;
 
-  // ISO valves on panel skid (water + N2)
-  supervisory += totalPanels * 1; // water ISO
-  supervisory += totalPanels * 1; // N2 ISO
+  supervisory += totalPanels * 1;
+  supervisory += totalPanels * 1;
 
-  // Batteries
-  supervisory += bat * 2; // battery fault + AC fault
+  supervisory += bat * 2;
 
-  // Water tank level
   if (waterTankPresent) supervisory += 1;
-
-  // Bulk refill option ensures at least one releasing circuit
   if (bulk) releasing = Math.max(releasing, 1);
 
   return { supervisory, alarm, releasing };
@@ -389,20 +380,12 @@ function estimateDoubleStackedRackHoseFromZones(maxCylAcrossZones: number) {
 }
 
 /** ─────────────────────────────────────────────────────────────
- *  NFPA 770 FORWARD-FLOW (CLASS A/C & B)
+ *  CORE FORWARD-FLOW EQUATIONS
  *  ────────────────────────────────────────────────────────────*/
-function isNFPA_AC_or_B(m: string) {
-  return m === "NFPA 770 Class A/C" || m === "NFPA 770 Class B";
-}
-function designDischargeLimitMin(): number {
-  // Forward-flow chapter target
-  return 3;
-}
 function sum<T>(arr: T[], f: (x: T) => number) {
   return arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 }
 
-// Core equations from Chapter 4
 function enclosureQreq_N2_enc_ft3({
   V_ft3,
   T_min_K,
@@ -414,11 +397,9 @@ function enclosureQreq_N2_enc_ft3({
   acf: Num;
   ff?: Num;
 }): Num {
-  // Qreq,N2,enc = V × (294.4/Tmin) × ACF × FF × SF
   return V_ft3 * (T_STD_K / T_min_K) * acf * ff * SAFETY_FACTOR;
 }
 function enclosureFlowReq_SCFM(Qreq_enc_SCF: Num, t_design_min: Num): Num {
-  // Qreq,N2,flow = Qreq,N2,enc / t_d
   return Qreq_enc_SCF / Math.max(t_design_min, 1e-6);
 }
 function requiredEmittersForEnclosure(
@@ -432,47 +413,44 @@ function estimatedTdForEnclosure(Qreq_enc_SCF: Num, Q_flow_enc_SCFM: Num): Num {
   return Q_flow_enc_SCFM > 0 ? Qreq_enc_SCF / Q_flow_enc_SCFM : 0;
 }
 
-// Typed working row for forward-flow path
-type CalcRow = {
-  skip: false;
+/** ─────────────────────────────────────────────────────────────
+ *  UNIFIED ZONE ROW
+ *  ────────────────────────────────────────────────────────────*/
+type ZoneRow = {
   enc: Enclosure;
   V_ft3: number;
   T_K: number;
   acf: number;
   ff: number;
-  Qreq_enc_SCF: number;
   qNoz_SCFM: number;
   qWater_GPM: number;
-  opPSI: number; // ← operating pressure used for per-PSI panel grouping
+  opPSI: number;
+
   emitters_calc: number;
   emitters_final: number;
+  Qreq_enc_SCF: number;
   Q_flow_enc_SCFM: number;
   t_est_min: number;
 };
-type ForwardRow = { skip: true; enc: Enclosure } | CalcRow;
-function isCalcRow(r: ForwardRow): r is CalcRow {
-  return r.skip === false;
-}
 
-// Build per-enclosure rows for a zone (forward-flow)
-function forwardPerEnclosureTotals(
+/** ─────────────────────────────────────────────────────────────
+ *  ROW BUILDERS (FORWARD + FMTMS)
+ *  ────────────────────────────────────────────────────────────*/
+function buildRowsForwardLike(
   p: Project,
   sys: System,
   zone: Zone,
+  fam: "NFPA" | "FMDC",
   messages: StatusInput[]
-): ForwardRow[] {
-  const acf = ACF_BY_ELEVATION[p.elevation];
-  const t_design = designDischargeLimitMin();
+): ZoneRow[] {
+  const acf = ACF_BY_ELEVATION[p.elevation] ?? 1.0;
+  const t_design = designTimeMinForFamily(sys, fam);
 
   return (zone.enclosures ?? []).map((enc) => {
-    if (!isNFPA_AC_or_B(enc.method)) {
-      return { enc, skip: true } as const;
-    }
-
-    // Inputs and base requirements
     const V_ft3 = volToFt3(p, Number(enc.volume) || 0);
     const T_K = tempToKelvin(p, Number(enc.tempF) || 70);
     const ff = FLOODING_FACTOR[enc.method] ?? 0.375;
+
     const Qreq_enc_SCF = enclosureQreq_N2_enc_ft3({
       V_ft3,
       T_min_K: T_K,
@@ -480,22 +458,32 @@ function forwardPerEnclosureTotals(
       ff,
     });
 
-    // Nozzle properties
     const qNoz_SCFM = getNozzleFlowSCFM(enc);
-
     const qWater_GPM = getNozzleWaterGPM(enc);
     const opPSI = getNozzleOpPSI(enc);
 
-    // Emitters + flow + time
     const Qreq_flow_SCFM = enclosureFlowReq_SCFM(Qreq_enc_SCF, t_design);
-    const emitters_calc = requiredEmittersForEnclosure(
-      Qreq_flow_SCFM,
-      qNoz_SCFM
-    );
+
+    let emitters_calc = 0;
+
+    if (qNoz_SCFM > 0) {
+      const raw = Qreq_flow_SCFM / qNoz_SCFM;
+
+      if (fam === "FMDC") {
+        // Excel: ROUNDDOWN(raw, 0), but if that would be 0 and volume exists -> 1
+        const down = Math.floor(raw);
+        emitters_calc = down === 0 && V_ft3 > 0 ? 1 : Math.max(0, down);
+      } else {
+        // NFPA: round up to satisfy the maximum discharge time limit
+        emitters_calc = Math.max(0, Math.ceil(raw));
+      }
+    }
+
     const emitters_final = hasCustomEmitters(enc)
       ? getCustomEmitters(enc)
       : emitters_calc;
-    if (hasCustomEmitters(enc) && emitters_final != emitters_calc) {
+
+    if (hasCustomEmitters(enc) && emitters_final !== emitters_calc) {
       pushNote(enc, "Custom nozzle count applied.");
       messages.push(
         statusFromCode(
@@ -508,114 +496,153 @@ function forwardPerEnclosureTotals(
 
     const Q_flow_enc_SCFM = emitters_final * qNoz_SCFM;
     const t_est = estimatedTdForEnclosure(Qreq_enc_SCF, Q_flow_enc_SCFM);
-
-    if (t_est > t_design + 1e-6) {
+    // NEW: NFPA under 2.1 min warning (suggest lower pressure/smaller nozzles)
+    if (fam === "NFPA" && t_est > 0 && t_est < 2.1 - 1e-6) {
       messages.push(
         statusFromCode(
-          "ENC.NFPA_MAX_DISCHARGE",
+          "ENC.NFPA_LOW_DISCHARGE",
           { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
-          { name: enc.name, t_est: round2(t_est) }
+          { name: enc.name, t_est: ceil2(t_est) }
+        )
+      );
+    }
+
+    if (fam === "FMDC" && t_est > 0 && t_est < 3.5 - 1e-6) {
+      messages.push(
+        statusFromCode(
+          "ENC.FMDC_MIN_DISCHARGE",
+          { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
+          { t_actual: ceil2(t_est) } // ceiling display
         )
       );
     }
 
     return {
       enc,
-      skip: false,
       V_ft3,
       T_K,
       acf,
       ff,
+      qNoz_SCFM,
+      qWater_GPM,
       opPSI,
-      Qreq_enc_SCF, // raw
-      qNoz_SCFM, // raw
-      qWater_GPM, // raw
       emitters_calc,
       emitters_final,
-      Q_flow_enc_SCFM, // raw
-      t_est_min: t_est, // raw
-    } as const;
+      Qreq_enc_SCF,
+      Q_flow_enc_SCFM,
+      t_est_min: t_est,
+    };
+  });
+}
+
+function buildRowsFMTMS(
+  p: Project,
+  sys: System,
+  zone: Zone,
+  messages: StatusInput[]
+): ZoneRow[] {
+  const acf = ACF_BY_ELEVATION[p.elevation] ?? 1.0;
+  const t_design = designTimeMinForFamily(sys, "FMTMS");
+
+  return (zone.enclosures ?? []).map((enc) => {
+    const V_ft3 = volToFt3(p, Number(enc.volume) || 0);
+    const T_K = tempToKelvin(p, Number(enc.tempF) || 70);
+    const ff = FLOODING_FACTOR[enc.method] ?? 0.375;
+
+    // defaults used previously in legacy path
+    let qNoz_SCFM = getNozzleFlowSCFM(enc);
+    let qWater_GPM = getNozzleWaterGPM(enc);
+    if (!qNoz_SCFM) qNoz_SCFM = 150;
+    if (!qWater_GPM) qWater_GPM = 1.06;
+
+    const opPSI = getNozzleOpPSI(enc);
+
+    const emitters_calc = Math.max(0, estimateFMTMSEmitters(p, enc));
+    const emitters_final = hasCustomEmitters(enc)
+      ? getCustomEmitters(enc)
+      : emitters_calc;
+
+    if (hasCustomEmitters(enc) && emitters_final !== emitters_calc) {
+      pushNote(enc, "Custom nozzle count applied.");
+      messages.push(
+        statusFromCode(
+          "ENC.CUSTOM_NOZZLES",
+          { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
+          { name: enc.name, final: emitters_final, calc: emitters_calc }
+        )
+      );
+    }
+
+    // For FMTMS, requirement is driven by (emitters * nozzle flow * design time)
+    const Q_flow_enc_SCFM = emitters_final * qNoz_SCFM;
+    const Qreq_enc_SCF = Q_flow_enc_SCFM * t_design;
+
+    // By construction, t_est == t_design (unless flow is 0)
+    const t_est = Q_flow_enc_SCFM > 0 ? Qreq_enc_SCF / Q_flow_enc_SCFM : 0;
+    return {
+      enc,
+      V_ft3,
+      T_K,
+      acf,
+      ff,
+      qNoz_SCFM,
+      qWater_GPM,
+      opPSI,
+      emitters_calc,
+      emitters_final,
+      Qreq_enc_SCF,
+      Q_flow_enc_SCFM,
+      t_est_min: t_est,
+    };
   });
 }
 
 /** ─────────────────────────────────────────────────────────────
- *  ZONE SIZING STEPS (FORWARD-FLOW): CYLINDERS → O2 → WATER/TANK → PANELS
+ *  SHARED ZONE SIZING STEPS
  *  ────────────────────────────────────────────────────────────*/
-
-// 1) Cylinder sizing from summed N2 requirement
-function sizeCylindersFromZoneNeed(
+function sizeStorageFromRows(
   p: Project,
   sys: System,
   zone: Zone,
-  rows: ForwardRow[]
+  rows: ZoneRow[]
 ) {
   const opts = asEngineeredOptions(sys);
-  const calcRows = rows.filter(isCalcRow);
+  const bulkOn = !!opts.bulkTubes;
 
-  // Zone PROVIDED flow (based on emitters_final)
-  const QN2_zone_SCFM = calcRows.reduce((s, r) => s + r.Q_flow_enc_SCFM, 0);
+  const QN2_zone_SCFM = rows.reduce((s, r) => s + r.Q_flow_enc_SCFM, 0);
 
-  // Controlling enclosure time (still useful for valve-time checks)
-  const td_highest_est_min = calcRows.reduce(
+  // controlling time = highest enclosure estimated discharge time
+  const td_highest_est_min = rows.reduce(
     (m, r) => Math.max(m, r.t_est_min || 0),
     0
   );
 
-  const Wreq_zone_SCF = QN2_zone_SCFM * td_highest_est_min;
-
-  const fillPressure = sys.options.fillPressure || "3000 PSI/206.8 BAR";
-  const caps =
-    CYL_CAP_DEFAULT[fillPressure] ?? CYL_CAP_DEFAULT["3000 PSI/206.8 BAR"];
-
-  const bulkOn = !!opts.bulkTubes;
-
-  if (bulkOn) {
-    return {
-      QN2_zone_SCFM,
-      td_highest_est_min,
-      Wreq_zone_SCF,
-      caps,
-      minCylinders: 0,
-      cyl_final: 0,
-      bulkOn,
-    };
-  }
-
-  const minCylinders = Math.max(
-    0,
-    Math.ceil(Wreq_zone_SCF / Math.max(1, caps.total))
-  );
-
-  const useCustom = hasCustomCyl(zone);
-  const cyl_final = useCustom ? getCustomCyl(zone) : minCylinders;
+  const Wreq_zone_SCF_raw = QN2_zone_SCFM * td_highest_est_min;
 
   return {
+    bulkOn,
     QN2_zone_SCFM,
     td_highest_est_min,
-    Wreq_zone_SCF,
-    caps,
-    minCylinders,
-    cyl_final,
-    bulkOn,
+    Wreq_zone_SCF_raw,
   };
-} // 2) O2 compute per enclosure + expose display fields
-function computePerEnclosureO2AndExpose(
+}
+
+function computePerEnclosureO2AndExposeUnified(
   p: Project,
   sys: System,
   zone: Zone,
-  rows: ForwardRow[],
+  rows: ZoneRow[],
   params: {
     Wprov_zone_SCF: number;
     QN2_zone_SCFM: number;
+    suppressDischargeTime: boolean;
   }
 ) {
-  const { Wprov_zone_SCF, QN2_zone_SCFM } = params;
+  const { Wprov_zone_SCF, QN2_zone_SCFM, suppressDischargeTime } = params;
 
   const encsOut: Enclosure[] = rows.map((r) => {
-    if (!isCalcRow(r)) return r.enc;
-
     const propRaw = QN2_zone_SCFM > 0 ? r.Q_flow_enc_SCFM / QN2_zone_SCFM : 0;
-    const prop = Math.round(propRaw * 10000) / 10000; // doc: 4 decimals
+    const prop = Math.round(propRaw * 10000) / 10000;
 
     const Vn2_forO2_SCF = Wprov_zone_SCF * prop;
 
@@ -625,14 +652,13 @@ function computePerEnclosureO2AndExpose(
       T_K: r.T_K,
       acf: r.acf,
     });
-
-    const flowLabel = r.qWater_GPM > 0 ? `${round2(r.qWater_GPM)} GPM` : "—";
-
+    const flowLabel = r.qWater_GPM > 0 ? `${r.qWater_GPM} GPM` : "—";
+    const dischargeLabel = r.t_est_min > 0 ? `${ceil2(r.t_est_min)} min` : "—";
     return {
       ...r.enc,
       minEmitters: r.emitters_final,
-      estDischarge: `${round2(r.t_est_min)} min`,
-      estFinalO2: Number.isFinite(o2_final) ? `${round2(o2_final)} %` : "—",
+      estDischarge: dischargeLabel,
+      estFinalO2: Number.isFinite(o2_final) ? `${ceil2(o2_final)} %` : "—",
       flowCartridge: flowLabel,
       qWater_gpm: r.qWater_GPM,
       qWaterTotal_gpm: r.qWater_GPM * r.emitters_final,
@@ -642,7 +668,6 @@ function computePerEnclosureO2AndExpose(
   return { encsOut };
 }
 
-// 3) Water calc and minimum tank size (zone)
 function computeZoneWaterAndTank(
   p: Project,
   sys: System,
@@ -663,7 +688,6 @@ function computeZoneWaterAndTank(
   };
 }
 
-// 4) Panel sizing (per-flow capacity) for a single flow number
 function sizePanelsFromZoneFlow(
   sys: System,
   zoneTotalFlow_SCFM: number
@@ -683,9 +707,9 @@ function sizePanelsFromZoneFlow(
 }
 
 /** ─────────────────────────────────────────────────────────────
- *  ZONE CALC (FORWARD: NFPA 770 A/C & B)
+ *  UNIFIED ZONE CALC (REPLACES calcZone_TotalFloodNFPA + calcZone_Legacy)
  *  ────────────────────────────────────────────────────────────*/
-function calcZone_TotalFloodNFPA(
+function calcZone_EngineeredUnified(
   p: Project,
   sys: System,
   zone: Zone,
@@ -694,53 +718,78 @@ function calcZone_TotalFloodNFPA(
   const encs = zone.enclosures ?? [];
   if (encs.length === 0) return zone;
 
-  // 4.1–4.2: Build per-enclosure forward-flow rows (NFPA 770 A/C & B only)
-  const rows = forwardPerEnclosureTotals(p, sys, zone, messages);
+  const families = new Set(encs.map((e) => methodFamily(e.method)));
 
-  // 4.3: Zone sizing inputs derived from rows
-  const sized = sizeCylindersFromZoneNeed(p, sys, zone, rows);
-  const opts = asEngineeredOptions(sys);
-  const {
-    QN2_zone_SCFM,
-    td_highest_est_min,
-    Wreq_zone_SCF,
-    caps,
-    cyl_final,
-    minCylinders,
-    bulkOn,
-  } = sized;
-
-  const calcRows = rows.filter(isCalcRow);
-
-  // Warn when user overrides cylinders (cylinder mode only)
-  if (!bulkOn && hasCustomCyl(zone)) {
-    pushNote(zone.enclosures[0], "Custom cylinder count applied.");
-    messages.push(
-      statusFromCode(
-        "ZONE.CUSTOM_CYLINDERS",
-        { systemId: sys.id, zoneId: zone.id },
-        { actual: cyl_final, recommended: minCylinders }
-      )
-    );
+  if (families.size > 1) {
+    // Return early so no enclosure-level logic runs
+    return {
+      ...zone,
+      enclosures: encs.map((e) => ({
+        ...e,
+        estDischarge: "—",
+        estFinalO2: "—",
+      })),
+      totalNitrogenRequired_scf: 0 as any,
+      totalNitrogenDelivered_scf: 0 as any,
+      minTotalCylinders: 0,
+      q_n2_peak_scfm: 0 as any,
+      water_peak_gpm: 0 as any,
+      waterDischarge_gal: 0 as any,
+      waterTankMin_gal: 0 as any,
+      ...({
+        panelSizing: { bore: "1in", capacity: 1800, qty: 0, style: "ar" },
+        panelSizingByPressure: [],
+        designLabel: "spec_hazards",
+      } as any),
+    };
   }
 
-  const activeEncCount = calcRows.filter((r) => (r.V_ft3 ?? 0) > 0).length;
+  const fam = Array.from(families)[0] as MethodFamily;
+  const opts = asEngineeredOptions(sys);
+
+  // Build rows based on family
+  const rows: ZoneRow[] =
+    fam === "FMTMS"
+      ? buildRowsFMTMS(p, sys, zone, messages)
+      : buildRowsForwardLike(p, sys, zone, fam, messages);
+
+  // Base zone aggregates
+  const sized = sizeStorageFromRows(p, sys, zone, rows);
+  const { QN2_zone_SCFM, td_highest_est_min } = sized;
+
+  // Display time in calculations must be CEILING to avoid under-delivery
+  const t_display_min = ceil2(Math.max(0, td_highest_est_min || 0));
+
+  // Required nitrogen:
+  // - Keep your prior multi-enclosure Excel behavior: use displayed controlling time for flow×time
+  // - Single enclosure: use raw (flow × exact t_est)
+  const activeEncCount = rows.filter((r) => (r.V_ft3 ?? 0) > 0).length;
   const isMultiEnclosure = activeEncCount > 1;
 
-  // Excel uses the displayed (2-decimal) max discharge time in the flow×time requirement.
-  const t_design_display_min = round2(Math.max(0, td_highest_est_min || 0));
+  const Wreq_zone_SCF_raw =
+    QN2_zone_SCFM * Math.max(0, td_highest_est_min || 0);
+  const Wreq_zone_SCF_display = QN2_zone_SCFM * t_display_min;
 
-  const Wreq_zone_excel_SCF = isMultiEnclosure
-    ? QN2_zone_SCFM * t_design_display_min
-    : Wreq_zone_SCF;
+  const Wreq_zone_SCF = isMultiEnclosure
+    ? Wreq_zone_SCF_display
+    : Wreq_zone_SCF_raw;
 
-  // 4.4: Compute zone-level provided nitrogen (bulk tubes OR cylinders) and resulting flow time
+  // Storage selection (cylinders vs bulk)
+  const fillPressure = sys.options.fillPressure || "3000 PSI/206.8 BAR";
+  const caps = cylinderCapsForFamily(fam, fillPressure);
+
+  const bulkOn = !!opts.bulkTubes;
+
   let Wprov_zone_SCF = 0;
   let t_flow_zone_min = 0;
+  let cyl_final = 0;
+  let minCylinders = 0;
+
+  // Track nitrogen calc error → suppress discharge time display
+  let n2CalcError = false;
 
   if (bulkOn) {
-    // Required open time = highest enclosure estimated discharge time (2 decimals)
-    const requiredOpenMin = t_design_display_min;
+    const requiredOpenMin = t_display_min;
 
     const isEditingOpen = !!zone._editBulkValveOpenTimeMin;
 
@@ -749,61 +798,70 @@ function calcZone_TotalFloodNFPA(
       ? userOpenRaw
       : requiredOpenMin;
 
-    // If user edits, we clamp to at least required time (matches intent of sheet)
-    const tOpen = round2(
+    // Clamp to at least required time; store CEIL to 2 decimals
+    const tOpen = ceil2(
       isEditingOpen ? Math.max(requiredOpenMin, userOpen) : requiredOpenMin
     );
 
-    // Persist both for UI (always 2 decimals)
     zone.bulkValveOpenTimeMinRequired = requiredOpenMin;
     zone.bulkValveOpenTimeMin = tOpen;
 
     const capPerTube = getBulkTubeCapacityPerTubeSCF(sys);
-    // IMPORTANT:
-    // Use Excel-aligned required SCF for tube count so the "tube qty" matches the sheet
-    const tubesMin = minBulkTubesRequired(Wreq_zone_excel_SCF, capPerTube);
+    const tubesMin = minBulkTubesRequired(Wreq_zone_SCF, capPerTube);
     const bulkCapSCF = tubesMin * capPerTube;
 
-    // What we could deliver if the bulk valve stays open for tOpen
     const idealDeliverable = QN2_zone_SCFM * tOpen;
-
-    // Provided nitrogen is limited by tube storage capacity
     Wprov_zone_SCF = Math.min(idealDeliverable, bulkCapSCF);
-
-    // Actual flow time based on what was provided
     t_flow_zone_min = QN2_zone_SCFM > 0 ? Wprov_zone_SCF / QN2_zone_SCFM : 0;
 
-    // Persist for UI/BOM
     zone.minTotalTubes = tubesMin;
   } else {
-    // Cylinder mode: provided nitrogen is based on total cylinder capacity (SCF)
+    minCylinders = Math.max(
+      0,
+      Math.ceil(Wreq_zone_SCF / Math.max(1, caps.total))
+    );
+    cyl_final = hasCustomCyl(zone) ? getCustomCyl(zone) : minCylinders;
+
+    if (hasCustomCyl(zone)) {
+      pushNote(zone.enclosures?.[0], "Custom cylinder count applied.");
+      messages.push(
+        statusFromCode(
+          "ZONE.CUSTOM_CYLINDERS",
+          { systemId: sys.id, zoneId: zone.id },
+          { actual: cyl_final, recommended: minCylinders }
+        )
+      );
+    }
+
     Wprov_zone_SCF = cyl_final * caps.total;
     t_flow_zone_min = QN2_zone_SCFM > 0 ? Wprov_zone_SCF / QN2_zone_SCFM : 0;
   }
 
-  // Zone-level: delivered vs required (Excel-aligned requirement)
-  if (Wprov_zone_SCF + 1e-6 < Wreq_zone_excel_SCF) {
+  // Zone-level N2 requirement check
+  if (Wprov_zone_SCF + 1e-6 < Wreq_zone_SCF) {
+    n2CalcError = true;
     messages.push(
       statusFromCode(
         "ZONE.N2_NOT_MET",
         { systemId: sys.id, zoneId: zone.id },
         {
           provided: Math.round(Wprov_zone_SCF),
-          required: Math.round(Wreq_zone_excel_SCF),
+          required: Math.round(Wreq_zone_SCF),
           bulkOn,
         }
       )
     );
   }
 
-  // Enclosure-level: allocation vs enclosure requirement (still use each enclosure’s own Qreq)
-  for (const r of calcRows) {
+  // Enclosure-level N2 requirement check (allocation by flow proportion)
+  for (const r of rows) {
     const propRaw = QN2_zone_SCFM > 0 ? r.Q_flow_enc_SCFM / QN2_zone_SCFM : 0;
-    const pflow = Math.round(propRaw * 10000) / 10000; // legacy behavior: 4 decimals
+    const pflow = Math.round(propRaw * 10000) / 10000;
 
     const WN2_enc_SCF = Wprov_zone_SCF * pflow;
 
     if (WN2_enc_SCF + 1e-6 < r.Qreq_enc_SCF) {
+      n2CalcError = true;
       messages.push(
         statusFromCode(
           "ENC.N2_NOT_MET",
@@ -819,25 +877,32 @@ function calcZone_TotalFloodNFPA(
     }
   }
 
-  // O2 per enclosure + expose UI fields using zone provided SCF and zone flow SCFM
-  const { encsOut } = computePerEnclosureO2AndExpose(p, sys, zone, rows, {
-    Wprov_zone_SCF,
-    QN2_zone_SCFM,
-  });
+  // O2 + UI fields (suppress discharge time display when any N2 error exists)
+  const { encsOut } = computePerEnclosureO2AndExposeUnified(
+    p,
+    sys,
+    zone,
+    rows,
+    {
+      Wprov_zone_SCF,
+      QN2_zone_SCFM,
+      suppressDischargeTime: n2CalcError,
+    }
+  );
 
-  // 4.5.2 Water + tank requirement for this zone (uses actual flow time derived above)
+  // Water + tank (use actual flow time derived from provided nitrogen)
   const water = computeZoneWaterAndTank(p, sys, encsOut, t_flow_zone_min);
 
-  // Panel sizing: group by operating pressure (one panel group per unique op PSI)
+  // Panel grouping by operating pressure
   const flowByPSI = new Map<number, number>();
   for (const r of rows) {
-    if (isCalcRow(r) && r.opPSI > 0) {
+    if (r.opPSI > 0) {
       flowByPSI.set(r.opPSI, (flowByPSI.get(r.opPSI) || 0) + r.Q_flow_enc_SCFM);
     }
   }
 
   const panelGroups = Array.from(flowByPSI.entries())
-    .sort((a, b) => b[0] - a[0]) // higher PSI first
+    .sort((a, b) => b[0] - a[0])
     .map(([psi, flow]) => ({ psi, ...sizePanelsFromZoneFlow(sys, flow) }));
 
   const panelQtyTotal = panelGroups.reduce((s, g) => s + g.qty, 0);
@@ -863,351 +928,51 @@ function calcZone_TotalFloodNFPA(
     );
   }
 
+  // Design label for UI (kept from prior behavior)
+  let designLabel: "data_proc" | "comb_turb" | "spec_hazards";
+  if (fam === "FMDC") designLabel = "data_proc";
+  else if (fam === "FMTMS") designLabel = "comb_turb";
+  else designLabel = "spec_hazards";
+
   return {
     ...zone,
     enclosures: encsOut,
 
-    // ✅ Excel-aligned required nitrogen; delivered is computed from tubes/cylinders above
-    totalNitrogenRequired_scf: round2(Wreq_zone_excel_SCF) as any,
-    totalNitrogenDelivered_scf: round2(Wprov_zone_SCF) as any,
+    totalNitrogenRequired_scf: ceil2(Wreq_zone_SCF) as any,
+    totalNitrogenDelivered_scf: ceil2(Wprov_zone_SCF) as any,
 
-    // Cylinder vs bulk outputs
     minTotalCylinders: bulkOn ? 0 : cyl_final,
     ...(bulkOn ? { minTotalTubes: zone.minTotalTubes } : {}),
 
-    // Peak flow (SCFM) and water outputs
     q_n2_peak_scfm: QN2_zone_SCFM as any,
     water_peak_gpm: water.qWaterPeak_GPM as any,
     waterDischarge_gal: water.zoneWaterDischarge_GAL as any,
     waterTankMin_gal: water.zoneTankMin_GAL as any,
 
-    // Panels + design label
     ...({
       panelSizing,
       panelSizingByPressure,
-      designLabel: "spec_hazards",
+      designLabel,
     } as any),
   };
 }
 
 /** ─────────────────────────────────────────────────────────────
- *  ZONE CALC (LEGACY: FM DC / TURBINES / MACHINE SPACES)
- *  ────────────────────────────────────────────────────────────*/
-function calcZone_Legacy(
-  project: Project,
-  sys: System,
-  zone: Zone,
-  messages: StatusInput[]
-): Zone {
-  const encs = zone.enclosures ?? [];
-  if (encs.length === 0) return zone;
-
-  const acf = ACF_BY_ELEVATION[project.elevation] ?? 1.0;
-  const opts = asEngineeredOptions(sys);
-  // Working row for legacy path
-  type RowOut = {
-    enc: Enclosure;
-    Vreq_scf: number;
-    emitters: number;
-    qNoz: number;
-    qWaterNoz: number;
-    qTotal: number;
-    qWaterTotal: number;
-    T_K: number;
-    opPSI: number;
-    V_ft3: number;
-  };
-
-  // 1) Build rows
-  const rows: RowOut[] = encs.map((e) => {
-    const method = e.method;
-    const T_K = tempToKelvin(project, Number(e.tempF) || 70);
-    const tCorr = T_STD_K / T_K;
-    const V_ft3 = volToFt3(project, Number(e.volume) || 0);
-    const opPSI = getNozzleOpPSI(e);
-
-    let emitters = 0;
-    let qNoz = getNozzleFlowSCFM(e);
-    let qWaterNoz = getNozzleWaterGPM(e);
-    let Vreq_scf = 0;
-
-    if (method === "FM Turbines" || method === "FM Machine Spaces") {
-      if (!qNoz) qNoz = 150;
-      if (!qWaterNoz) qWaterNoz = 1.06;
-      emitters = Math.max(0, estimateFMTMSEmitters(project, e));
-      const t_design =
-        method === "FM Turbines" ? 10 + (opts.rundownTimeMin || 0) : 10;
-      Vreq_scf = emitters * qNoz * t_design;
-    } else {
-      const ff = FLOODING_FACTOR[method] ?? 0.375;
-      Vreq_scf = V_ft3 * tCorr * acf * ff * SAFETY_FACTOR;
-      emitters = 0; // emitters will be set from qNoz proportion below
-    }
-
-    return {
-      enc: e,
-      Vreq_scf,
-      emitters,
-      qNoz,
-      qWaterNoz,
-      qTotal: 0,
-      qWaterTotal: 0,
-      T_K,
-      V_ft3,
-      opPSI,
-    };
-  });
-
-  // 2) Cylinders & time for legacy methods
-  const anyMethod = encs[0].method;
-  const caps = getCylinderCaps(anyMethod, sys.options.fillPressure);
-  const W_zone_req = rows.reduce((s, r) => s + r.Vreq_scf, 0);
-  const minCylBase = Math.max(0, Math.ceil(W_zone_req / caps.total));
-  const minCylEff = hasCustomCyl(zone) ? getCustomCyl(zone) : minCylBase;
-  const bulkOn = !!opts?.bulkTubes;
-
-  if (!bulkOn && hasCustomCyl(zone)) {
-    pushNote(zone.enclosures[0], "Custom cylinder count applied.");
-    messages.push(
-      statusFromCode(
-        "ZONE.CUSTOM_CYLINDERS",
-        { systemId: sys.id, zoneId: zone.id },
-        { actual: minCylEff, recommended: minCylBase }
-      )
-    );
-  }
-
-  const t_design_zone =
-    anyMethod === "FM Turbines"
-      ? 10 + (opts.rundownTimeMin || 0)
-      : anyMethod === "FM Machine Spaces"
-        ? 10
-        : anyMethod === "FM Data Centers"
-          ? 3.5
-          : opts.rundownTimeMin && opts.rundownTimeMin > 0
-            ? opts.rundownTimeMin
-            : 3;
-
-  // 3) Emitters allocation (for non-FM-T/M/S use proportional flow logic)
-  const totalVolFt3 = encs.reduce(
-    (s, e) => s + volToFt3(project, Number(e.volume) || 0),
-    0
-  );
-  const rowsSized = rows.map((r) => {
-    let emittersComputed = r.emitters;
-    const isFM_TMS =
-      r.enc.method === "FM Turbines" || r.enc.method === "FM Machine Spaces";
-
-    let emittersFinal: number;
-    if (isFM_TMS) {
-      emittersFinal = clampInt(emittersComputed, 0);
-    } else {
-      const EF = totalVolFt3 > 0 ? r.V_ft3 / totalVolFt3 : 0;
-      const Q_req = ((minCylEff * caps.usable) / (t_design_zone || 1)) * EF;
-
-      const isFMDC = r.enc.method === "FM Data Centers";
-      const emittersRaw = r.qNoz > 0 ? Q_req / r.qNoz : 0;
-      emittersFinal = isFMDC ? Math.floor(emittersRaw) : Math.ceil(emittersRaw);
-      emittersFinal = clampInt(emittersFinal, 0);
-    }
-    if (hasCustomEmitters(r.enc) && emittersFinal != emittersComputed) {
-      pushNote(r.enc, "Custom nozzle count applied.");
-      emittersFinal = getCustomEmitters(r.enc);
-      messages.push(
-        statusFromCode(
-          "ENC.CUSTOM_NOZZLES",
-          { systemId: sys.id, zoneId: zone.id, enclosureId: r.enc.id },
-          { name: r.enc.name, final: emittersFinal, calc: emittersComputed }
-        )
-      );
-    }
-    const qTotal = emittersFinal * (r.qNoz || 0);
-    const qWaterTotal = emittersFinal * (r.qWaterNoz || 0);
-    return { ...r, emitters: emittersFinal, qTotal, qWaterTotal };
-  });
-
-  // 4) Zone totals + FM DC min time check
-  const zoneTotalFlowSCFM = rowsSized.reduce((s, r) => s + r.qTotal, 0);
-
-  let t_actual = 0;
-  let zoneTotalNitrogenSCF_Total = 0;
-  const isFMTMS =
-    anyMethod === "FM Turbines" || anyMethod === "FM Machine Spaces";
-
-  if (bulkOn) {
-    pushNote(zone.enclosures[0], "Bulk Tube Design");
-
-    const requiredOpenMin = round2(Math.max(0, t_design_zone || 0));
-
-    const isEditingOpen = !!zone._editBulkValveOpenTimeMin;
-
-    const userOpenRaw = Number(zone.bulkValveOpenTimeMin);
-    const userOpen = Number.isFinite(userOpenRaw)
-      ? userOpenRaw
-      : requiredOpenMin;
-
-    const tOpen = round2(
-      isEditingOpen ? Math.max(requiredOpenMin, userOpen) : requiredOpenMin
-    );
-
-    zone.bulkValveOpenTimeMinRequired = requiredOpenMin;
-    zone.bulkValveOpenTimeMin = tOpen;
-  } else {
-    t_actual =
-      zoneTotalFlowSCFM > 0 ? (minCylEff * caps.usable) / zoneTotalFlowSCFM : 0;
-    zoneTotalNitrogenSCF_Total = minCylEff * caps.total;
-  }
-
-  // Panel grouping by operating pressure (legacy path too)
-  const flowByPSI = new Map<number, number>();
-  for (const r of rowsSized) {
-    if (r.opPSI > 0) {
-      flowByPSI.set(r.opPSI, (flowByPSI.get(r.opPSI) || 0) + r.qTotal);
-    }
-  }
-  const panelGroups = Array.from(flowByPSI.entries())
-    .sort((a, b) => b[0] - a[0])
-    .map(([psi, flow]) => ({ psi, ...sizePanelsFromZoneFlow(sys, flow) }));
-  const panelQtyTotal = panelGroups.reduce((s, g) => s + g.qty, 0);
-  const panelSizing = {
-    bore: (panelGroups[0]?.bore ?? "1in") as "1in" | "1.5in",
-    capacity: panelGroups[0]?.capacity ?? 0,
-    qty: panelQtyTotal,
-    style: (panelGroups[0]?.style ??
-      (opts.panelStyle === "dc" ? "dc" : "ar")) as "ar" | "dc",
-  };
-  const panelSizingByPressure = panelGroups;
-
-  if (panelGroups.length > 1) {
-    const psiList = formatPsiList(panelGroups.map((g) => g.psi));
-    messages.push(
-      statusFromCode(
-        "ZONE.MULTI_OP_PSI",
-        { systemId: sys.id, zoneId: zone.id },
-        { psiList: psiList }
-      )
-    );
-  }
-
-  if (anyMethod === "FM Data Centers" && t_actual > 0 && t_actual < 3.5) {
-    messages.push(
-      statusFromCode(
-        "ENC.FMDC_MIN_DISCHARGE",
-        { systemId: sys.id, zoneId: zone.id },
-        { t_actual: round2(t_actual) }
-      )
-    );
-  }
-
-  // 5) Water & O2 per enclosure
-  const timeForWater = isFMTMS ? t_design_zone : t_actual;
-
-  let zoneWaterPeakGPM = 0;
-  let zoneWaterDischargeGal = 0;
-
-  const encsOut: Enclosure[] = rowsSized.map((r) => {
-    const prop = zoneTotalFlowSCFM > 0 ? r.qTotal / zoneTotalFlowSCFM : 0;
-    const Vn2_forO2 = prop * zoneTotalNitrogenSCF_Total;
-
-    const o2 = computeO2Percent({
-      Vn2_scf: Vn2_forO2,
-      Venc_ft3: r.V_ft3,
-      T_K: r.T_K,
-      acf,
-    });
-
-    zoneWaterPeakGPM += r.qWaterTotal;
-    const wWaterEncGal = r.qWaterTotal * (timeForWater || 0);
-    zoneWaterDischargeGal += wWaterEncGal;
-
-    const extra: any = {
-      qWater_gpm: round3(r.qWaterNoz || 0),
-      qWaterTotal_gpm: round3(r.qWaterTotal || 0),
-      estWater_gal: round2(wWaterEncGal),
-    };
-
-    const isFM_TMS2 =
-      r.enc.method === "FM Turbines" || r.enc.method === "FM Machine Spaces";
-
-    // GPM-based cartridge label
-    const flowLabel = r.qWaterNoz > 0 ? `${round2(r.qWaterNoz)} GPM` : "—";
-
-    return {
-      ...r.enc,
-      minEmitters: r.emitters,
-      estDischarge: isFM_TMS2
-        ? `${t_design_zone} min`
-        : `${round2(t_actual)} min`,
-      estFinalO2: Number.isFinite(o2) && o2 > 0 ? `${round2(o2)} %` : "—",
-      flowCartridge: flowLabel, // ← now GPM-based
-      ...extra,
-    } as Enclosure;
-  });
-
-  // 6) Zone tank min with pipe volume safety
-  const pipeVolGal = pipeVolumeToGallons(project, opts.estimatedPipeVolume);
-  const zoneTankMinGal = (zoneWaterDischargeGal + pipeVolGal) * SAFETY_FACTOR;
-
-  // 7) Design label selection for UI hints
-  const methodsInZone = new Set(encs.map((e) => e.method));
-  let designLabel: "data_proc" | "comb_turb" | "spec_hazards";
-  if (methodsInZone.size === 1 && methodsInZone.has("FM Data Centers")) {
-    designLabel = "data_proc";
-  } else if (
-    methodsInZone.has("FM Turbines") ||
-    methodsInZone.has("FM Machine Spaces")
-  ) {
-    designLabel = "comb_turb";
-  } else {
-    designLabel = "spec_hazards";
-  }
-  const zoneNitrogenRequired_scf = W_zone_req;
-
-  const zoneNitrogenDelivered_scf = bulkOn
-    ? zoneTotalNitrogenSCF_Total
-    : minCylEff * caps.usable; // IMPORTANT: usable, not total
-
-  return {
-    ...zone,
-    enclosures: encsOut,
-
-    // ✅ keep meaning consistent with NFPA-forward:
-    totalNitrogenRequired_scf: round2(zoneNitrogenRequired_scf) as any,
-    totalNitrogenDelivered_scf: round2(zoneNitrogenDelivered_scf) as any,
-
-    minTotalCylinders: bulkOn ? 0 : minCylEff,
-    ...(bulkOn ? { minTotalTubes: zone.minTotalTubes } : {}),
-
-    q_n2_peak_scfm: round2(zoneTotalFlowSCFM) as any,
-    water_peak_gpm: round2(zoneWaterPeakGPM) as any,
-    waterDischarge_gal: zoneWaterDischargeGal as any,
-    waterTankMin_gal: zoneTankMinGal as any,
-    ...({ panelSizing, panelSizingByPressure, designLabel } as any),
-  };
-}
-
-/** ─────────────────────────────────────────────────────────────
- *  SYSTEM CALC (PER SYSTEM): PICK ZONE PATHS, TANK, ESTIMATES, TOTALS
+ *  SYSTEM CALC (PER SYSTEM): ZONES → TANK → ESTIMATES → TOTALS
  *  ────────────────────────────────────────────────────────────*/
 function calcSystem_TotalFloodNFPA(
   project: Project,
   sys: System,
   messages: StatusInput[]
 ): System {
-  if (sys.options.kind !== "engineered") return sys; // or throw
+  if (sys.options.kind !== "engineered") return sys;
 
-  // 1) Zone-by-zone: choose forward (A/C or B only) vs legacy
-  const zones = sys.zones.map((z) => {
-    const hasACorB = (z.enclosures ?? []).some((e) => isNFPA_AC_or_B(e.method));
-    const hasOnlyACorB = (z.enclosures ?? []).every((e) =>
-      isNFPA_AC_or_B(e.method)
-    );
-    return hasACorB && hasOnlyACorB
-      ? calcZone_TotalFloodNFPA(project, sys, z, messages)
-      : calcZone_Legacy(project, sys, z, messages);
-  });
+  // Unified zone calc replaces legacy branching
+  const zones = sys.zones.map((z) =>
+    calcZone_EngineeredUnified(project, sys, z, messages)
+  );
 
-  // 2) Water tank selection (strict matching to chosen certification)
+  // Water tank selection (strict matching to chosen certification)
   const zoneNeeds = zones
     .map((z) => Number(z.waterTankMin_gal) || 0)
     .filter((g) => g > 0);
@@ -1246,6 +1011,7 @@ function calcSystem_TotalFloodNFPA(
   opts.waterTankCertification = cert;
   opts.waterTankPick = pickCodes;
   opts.waterTankPickDesc = pickDesc;
+
   // 3) Engineered estimates (panels, primaries, hoses, batteries, FACP)
   const maxCylAcrossZones = Math.max(
     0,
@@ -1299,7 +1065,6 @@ function calcSystem_TotalFloodNFPA(
     useUserFor(sys, "batteryBackups")
   );
 
-  // Recompute FACP using fresh numbers
   const waterTankPresent = !!opts.waterTank;
   const facp = estimateFacpTotalsFromDesign({
     sys,
@@ -1330,19 +1095,18 @@ function calcSystem_TotalFloodNFPA(
     monitorPoints,
   };
 
-  // 4) System totals for UI summary
+  // 4) System totals for UI summary (kept as-is)
   const nums = {
     cylMax: 0,
     cylZoneId: null as string | null,
-    n2Max: 0,
     n2ZoneId: null as string | null,
+    n2ReqMax: 0,
+    n2DelMax: 0,
     panelsSum: 0,
     flowSum: 0,
     waterTankMax: 0,
     waterTankZoneId: null as string | null,
     waterReqMax: 0,
-    n2ReqMax: 0,
-    n2DelMax: 0,
     tubeMax: 0,
     tubeZoneId: null as string | null,
   };
@@ -1359,14 +1123,15 @@ function calcSystem_TotalFloodNFPA(
 
     if (n2Req > nums.n2ReqMax) {
       nums.n2ReqMax = n2Req;
-      nums.n2ZoneId = z.id; // governing based on required
+      nums.n2ZoneId = z.id;
     }
+
     const tubes = Math.max(0, Number(z.minTotalTubes || 0));
     if (tubes > nums.tubeMax) {
       nums.tubeMax = tubes;
       nums.tubeZoneId = z.id;
     }
-    // optional: track delivered max separately (useful for bulk cases)
+
     nums.n2DelMax = Math.max(nums.n2DelMax, n2Del);
 
     const ps = z.panelSizing as { qty?: number } | undefined;
@@ -1390,15 +1155,10 @@ function calcSystem_TotalFloodNFPA(
     governingWaterZoneId: nums.waterTankZoneId,
 
     totalCylinders: bulkSelected ? nums.tubeMax : nums.cylMax,
-    totalBulkTubes: bulkSelected ? nums.tubeMax : 0, // optional but useful
+    totalBulkTubes: bulkSelected ? nums.tubeMax : 0,
 
-    // NEW: split required vs delivered
     totalNitrogenRequired_scf: Math.round(nums.n2ReqMax),
     totalNitrogenDelivered_scf: Math.round(nums.n2DelMax),
-
-    // keep old field if other UI depends on it (optional, but handy during transition)
-    totalNitrogen_scf: Math.round(nums.n2ReqMax),
-
     dischargePanels_qty: nums.panelsSum,
     waterTankRequired_gal: Math.ceil(nums.waterTankMax),
     waterRequirement_gal: round2(nums.waterReqMax),
@@ -1421,7 +1181,7 @@ export function calculateEngineered(p: Project): {
   const messages: StatusInput[] = [];
   const systems = p.systems.map((sys) =>
     sys.type === "engineered"
-      ? calcSystem_TotalFloodNFPA(p, sys, messages) // engineered systems are fully re-computed
+      ? calcSystem_TotalFloodNFPA(p, sys, messages)
       : sys
   );
   return { project: { ...p, systems }, messages };

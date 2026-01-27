@@ -1,0 +1,152 @@
+{
+  "__kind": "victaulic-vortex-config",
+  "version": 1,
+  "exportedAt": "2026-01-16T15:08:46.898Z",
+  "app": {
+    "name": "Configurator"
+  },
+  "project": {
+    "name": "Tutorial Project v2.1.2",
+    "firstName": "Vortex",
+    "lastName": "Designer",
+    "companyName": "Victaulic",
+    "projectLocation": "Easton, PA",
+    "phone": "6108107429",
+    "email": "vortex.designer@victaulic.com",
+    "currency": "USD",
+    "units": "imperial",
+    "elevation": "0FT/0KM",
+    "systems": [
+      {
+        "id": "sys_lthgv0o",
+        "name": "My First Engineered System",
+        "type": "engineered",
+        "zones": [
+          {
+            "id": "zone_23qhg3k",
+            "name": "Zone 1",
+            "enclosures": [
+              {
+                "id": "enc_7t654dz",
+                "name": "Small Enclosure",
+                "volume": 1000,
+                "tempF": 70,
+                "method": "NFPA 770 Class A/C",
+                "nozzleCode": "5825",
+                "emitterStyle": "escutcheon-stainless",
+                "customMinEmitters": null,
+                "_editEmitters": false,
+                "minEmitters": 1,
+                "estDischarge": "1.96 min",
+                "estFinalO2": "10.43 %",
+                "flowCartridge": "0.26 GPM",
+                "qWater_gpm": 0.26,
+                "qWaterTotal_gpm": 0.26,
+                "notes": [
+                  "Custom nozzle count applied.",
+                  "Custom cylinder count applied."
+                ]
+              },
+              {
+                "id": "enc_zxthb9k",
+                "name": "",
+                "volume": 15000,
+                "tempF": 70,
+                "method": "NFPA 770 Class A/C",
+                "nozzleCode": "5825",
+                "emitterStyle": "escutcheon-stainless",
+                "customMinEmitters": null,
+                "_editEmitters": false,
+                "minEmitters": 10,
+                "estDischarge": "2.94 min",
+                "estFinalO2": "13.16 %",
+                "flowCartridge": "0.26 GPM",
+                "qWater_gpm": 0.26,
+                "qWaterTotal_gpm": 2.6
+              }
+            ],
+            "customMinTotalCylinders": null,
+            "_editCylinders": false,
+            "totalNitrogenRequired_scf": 7438.2,
+            "totalNitrogenDelivered_scf": 7686,
+            "minTotalCylinders": 14,
+            "q_n2_peak_scfm": 2530,
+            "water_peak_gpm": 2.8600000000000003,
+            "waterDischarge_gal": 8.688521739130435,
+            "waterTankMin_gal": 10.426226086956522,
+            "panelSizing": {
+              "bore": "1.5in",
+              "capacity": 4500,
+              "qty": 1,
+              "style": "dc"
+            },
+            "panelSizingByPressure": [
+              {
+                "psi": 25,
+                "bore": "1.5in",
+                "capacity": 4500,
+                "qty": 1,
+                "style": "dc"
+              }
+            ],
+            "designLabel": "spec_hazards"
+          }
+        ],
+        "options": {
+          "kind": "engineered",
+          "fillPressure": "3000 PSI/206.8 BAR",
+          "refillAdapter": "CGA-580",
+          "waterTank": "ASME/FM",
+          "waterTankCertification": "ASME/FM",
+          "powerSupply": "120",
+          "panelStyle": "dc",
+          "bulkTubes": false,
+          "rundownTimeMin": 0,
+          "estimatedPipeVolume": 0,
+          "addOns": {
+            "placardsAndSignage": true,
+            "doorCount": 3,
+            "bulkRefillAdapter": false,
+            "expProofTransducer": true,
+            "waterFlexLine": false,
+            "igsFlexibleHose48": false
+          },
+          "editValues": false,
+          "estimates": {
+            "primaryReleaseAssemblies": 1,
+            "adjacentRackHose": 2,
+            "doubleStackedRackHose": 1,
+            "batteryBackups": 1,
+            "releasePoints": 2,
+            "monitorPoints": 9
+          },
+          "bulkTubeSize": null,
+          "bulkTubeLabel": null,
+          "bulkTubeNitrogenSCF": null,
+          "waterTankRequired_gal": 10.426226086956522,
+          "waterTankPick": [
+            "S300950140",
+            "D09500030VXWTW0"
+          ],
+          "waterTankPickDesc": "30 Gallon Water Tank, Red, w/ Trim, ASME and FM approved",
+          "bulkTubesEligible": true
+        },
+        "systemTotals": {
+          "governingNitrogenZoneId": "zone_23qhg3k",
+          "governingWaterZoneId": "zone_23qhg3k",
+          "totalCylinders": 14,
+          "totalBulkTubes": 0,
+          "totalNitrogenRequired_scf": 7438,
+          "totalNitrogenDelivered_scf": 7686,
+          "dischargePanels_qty": 1,
+          "waterTankRequired_gal": 11,
+          "waterRequirement_gal": 8.69,
+          "estReleasePoints": 2,
+          "estMonitorPoints": 9,
+          "estBatteryBackups": 1
+        }
+      }
+    ],
+    "customerMultiplier": 0.7
+  }
+}

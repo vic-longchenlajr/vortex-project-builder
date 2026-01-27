@@ -1,35 +1,44 @@
-/* src/styles/systemoptionspanel.module.css */
+/* =========================================================
+   src/styles/systemoptionspanel.module.css
+   - MUST consume configurator.module.css tokens
+   - Avoid hard-coded colors/sizes unless they are truly unique
+   ========================================================= */
 
-/* PANEL */
+/* PANEL
+   NOTE: do NOT use display: contents here if you want borders/background to show */
 .panel {
-  border: 1px dashed #e1e5ef;
-  border-radius: 6px;
-  padding: 12px;
-  margin: 8px 0 12px;
-  background: #fafbff;
   display: contents;
+}
+/* the visual “panel card” now lives here */
+.panelBody {
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin: 0 0 12px;
+  background: var(--surface-muted);
+  box-shadow: var(--shadow-1);
 }
 
 /* Sticky layered system header (under page controls) */
 .stickyBar {
   position: sticky;
-  top: var(--app-sticky-top, 64px);
-  z-index: 20;
-  backdrop-filter: saturate(120%) blur(2px);
-  background: color-mix(in srgb, #ffffff 82%, #eef2ff);
-  border: 1px solid #e5e8f1;
-  border-radius: 8px;
+  top: var(--app-sticky-top, 64px); /* <- add a small gap */
+  z-index: 998;
+
+  /* safe fallback + modern mix */
+  backdrop-filter: saturate(120%) blur(8px);
+  border: 1px solid var(--line-2);
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
   padding: 8px 10px;
   margin: 0 0 10px;
-  box-shadow:
-    0 1px 1px rgba(16, 24, 40, 0.06),
-    0 2px 4px rgba(16, 24, 40, 0.06);
+  border-top: none;
 }
 
 .stickyMain {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: var(--gap-2);
   align-items: center;
 }
 
@@ -42,7 +51,7 @@
 .sysName {
   font-weight: 700;
   font-size: clamp(14px, 2vw, 16px);
-  color: #0f172a;
+  color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -51,20 +60,20 @@
 /* System type pills */
 .sysType {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-12);
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--line-1);
   display: inline-block;
   margin-left: 6px;
 }
 .sysTypeEng {
-  background: rgba(37, 99, 235, 0.08);
+  background: var(--sys-eng-tint);
   border-color: rgba(37, 99, 235, 0.25);
   color: #1e3a8a;
 }
 .sysTypePre {
-  background: rgba(14, 165, 161, 0.1);
+  background: var(--sys-pre-tint);
   border-color: rgba(14, 165, 161, 0.25);
   color: #0f766e;
 }
@@ -82,8 +91,8 @@
   gap: 6px;
 }
 .kpiLabel {
-  font-size: 11px;
-  color: #475569;
+  font-size: var(--fs-11);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 .kpiValue {
@@ -91,18 +100,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rounded numeric input – base theme used everywhere in this module */
+/* Rounded numeric input – match configurator control skin */
 .kpiInput {
-  height: 24px;
-  padding: 2px 6px;
+  height: var(--ctl-h);
+  padding: var(--ctl-pad-y) 6px;
   width: 7ch;
   min-width: 56px;
   text-align: right;
+
   border: 1px solid #e5e8f1;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-13);
+  line-height: var(--lh-tight);
   font-variant-numeric: tabular-nums;
-  background: #fff;
+
+  background: var(--surface);
   box-sizing: border-box;
 }
 
@@ -112,8 +124,8 @@
 }
 .kpiBtn {
   border: 1px solid #e5e8f1;
-  background: #ffffff;
-  border-radius: 6px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
   width: 22px;
   height: 22px;
   line-height: 20px;
@@ -122,40 +134,43 @@
   cursor: pointer;
 }
 .kpiBtn:hover {
-  background: #f8fafc;
+  background: var(--surface-muted);
 }
 
 /* FORM CONTROLS – system configuration selects/inputs */
 .inputControl {
   width: 100%;
   max-width: 220px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-tight);
-  padding: 4px 8px;
+  height: var(--ctl-h);
+  padding: var(--ctl-pad-y) var(--ctl-pad-x);
+
   border: 1px solid #e5e8f1;
-  border-radius: 6px;
-  background: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+
   box-sizing: border-box;
+  font-size: var(--fs-13);
+  line-height: var(--lh-tight);
 }
 
 /* SECTION HEADERS */
 .rowHeading {
-  font-size: 12px;
+  font-size: var(--fs-12);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--ink-1);
   margin-bottom: 6px;
 }
 
 /* High-level layout */
 .sysOptionsLayout {
   display: grid;
-  gap: 12px;
+  gap: var(--gap-2);
 }
 
 /* Each “row” section (options, add-ons, results) */
 .optionRow {
-  padding-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
 .optionRow:first-of-type {
@@ -168,75 +183,77 @@
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 8px 12px;
 }
+
 .fieldBlock {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .fieldBlock label {
-  font-size: 12px;
-  color: #475569;
+  font-size: var(--fs-12);
+  color: var(--ink-2);
 }
+
 /* Estimates + results row */
 .rowResults {
   margin-top: 2px;
 }
+
 .resultsPairGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  align-items: flex-start; /* align top */
+  gap: var(--gap-2);
+  align-items: flex-start;
 }
 
 /* Result column */
 .estimateCol {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: var(--gap-1);
 }
 
 .muted {
-  color: #667085;
+  color: var(--ink-1);
+  font-size: var(--fs-13);
 }
 
-/* Shared results table styling – local to SystemOptionsPanel */
+/* Shared results table styling – match configurator tables */
 .resultsTable {
   width: 100%;
-  border: 1px solid #e3e6ef;
-  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
   border-collapse: separate;
   border-spacing: 0;
-  background: #fff;
-  font-size: 13px;
+  background: var(--surface);
+  font-size: var(--fs-13);
   overflow: hidden;
   table-layout: auto;
-  box-shadow:
-    0 1px 1px rgba(15, 23, 42, 0.04),
-    0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-1);
 }
 .resultsTable thead th {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--header-1);
+  color: var(--ink-2);
   font-weight: 600;
   text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid #e3e6ef;
+  padding: var(--cell-pad-y) var(--cell-pad-x);
+  border-bottom: 1px solid var(--line-2);
   white-space: nowrap;
 }
 .resultsTable td {
-  padding: 6px 8px;
+  padding: var(--cell-pad-y) var(--cell-pad-x);
   border-bottom: 1px solid #f0f2f8;
+}
+.resultsTable tbody tr:nth-child(even) {
+  background: var(--row-even);
 }
 .resultsTable tbody tr:last-child td {
   border-bottom: none;
 }
-.resultsTable tbody tr:nth-child(even) {
-  background: #fbfcff;
-}
 
 /* Key-value cells */
 .kvLabel {
-  color: #475569;
+  color: var(--ink-2);
   white-space: nowrap;
 }
 .kvValue {
@@ -247,10 +264,10 @@
 
 /* Estimated Values – slightly tighter cells */
 .estTable td {
-  padding: 4px 8px;
+  padding: 4px var(--cell-pad-x);
 }
 .estTable thead th {
-  padding: 6px 8px;
+  padding: var(--cell-pad-y) var(--cell-pad-x);
 }
 
 /* Checkbox + input controls inline */
@@ -265,6 +282,7 @@
   transform: scale(0.95);
 }
 
+/* Add-ons layout */
 .addonsGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -280,21 +298,23 @@
   min-width: 0;
 }
 
+/* Allow wrap (consistent + avoids invalid white-space: wrap) */
 .addonCheck {
   display: inline-flex;
-  align-items: flex-start; /* align from top by checkbox */
+  align-items: flex-start;
   gap: 8px;
-  white-space: nowrap; /* no wrapping */
-  line-height: 1.2;
+  white-space: normal;
+  line-height: var(--lh-tight);
 }
 
 .addonLabelText {
-  white-space: nowrap; /* no wrapping */
+  white-space: normal;
 }
 
 .addonLink {
-  white-space: nowrap; /* no wrapping */
+  white-space: nowrap;
   text-decoration: underline;
+  margin-left: 6px;
 }
 
 .addonInlineField {
@@ -305,41 +325,42 @@
 }
 
 .addonInlineLabel {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: var(--fs-12);
+  color: var(--ink-2);
+  opacity: 0.9;
   white-space: nowrap;
 }
 
-.addonInlineInput {
-  width: 25%;
-  font-size: var(--fs-md);
-  line-height: var(--lh-tight);
-  padding: 4px 8px;
+.addonInlineInput,
+.addonInlineSelect {
+  height: var(--ctl-h);
+  padding: var(--ctl-pad-y) var(--ctl-pad-x);
   border: 1px solid #e5e8f1;
-  border-radius: 6px;
-  background: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   box-sizing: border-box;
+  font-size: var(--fs-13);
+  line-height: var(--lh-tight);
 }
 
-.addonInlineSelect {
-  width: 100%;
-  font-size: var(--fs-md);
-  line-height: var(--lh-tight);
-  padding: 4px 8px;
-  border: 1px solid #e5e8f1;
-  border-radius: 6px;
-  background: #fff;
-  box-sizing: border-box;
+.addonInlineInput {
+  width: 84px;
+  text-align: right;
 }
+
 .addonCheck input[type="checkbox"] {
-  margin-top: 1px; /* tiny baseline nudge */
+  margin-top: 1px;
 }
+
+/* Prevent link/label overflow ugliness */
 .addonLabelText,
 .addonLink {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+/* RESPONSIVE */
 @media (max-width: 1100px) {
   .addonsGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -352,7 +373,6 @@
   }
 }
 
-/* RESPONSIVE */
 @media (max-width: 1080px) {
   .stickyMain {
     grid-template-columns: 1fr;

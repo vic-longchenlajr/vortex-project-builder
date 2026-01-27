@@ -31,10 +31,10 @@ const BULK_TUBE_FILL_PRESSURE = "2400 PSI/165.5 BAR";
 
 const BULK_TUBE_OPTIONS: { value: string; label: string; scf: number }[] = [
   { value: `38x24_2400`, label: `38' x 24" @ 2,400 psi`, scf: 15567 },
-  { value: `36x24_2400`, label: `36' x 24" @ 2,400 psi`, scf: 14715 },
-  { value: `34x22_2400`, label: `34' x 22" @ 2,400 psi`, scf: 12838 },
+  // { value: `36x24_2400`, label: `36' x 24" @ 2,400 psi`, scf: 14715 },
+  // { value: `34x22_2400`, label: `34' x 22" @ 2,400 psi`, scf: 12838 },
   { value: `24x24_2400`, label: `24' x 24" @ 2,400 psi`, scf: 9601 },
-  { value: `12x24_2400`, label: `12' x 24" @ 2,400 psi`, scf: 4497 },
+  // { value: `12x24_2400`, label: `12' x 24" @ 2,400 psi`, scf: 4497 },
 ];
 
 function bulkTubeByValue(value?: string) {
@@ -109,88 +109,6 @@ function makeId(prefix: string) {
     `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`
   );
 }
-
-/** Deep-duplicate a zone, giving new ids and incremented names.
- *  - Preserves *inputs* and configuration
- *  - Clears *calculation outputs*
- */
-function cloneZoneWithNewIds(base: any, zoneIndexNumber: number) {
-  const newZoneId = makeId("zone");
-  // Increment zone name (handle "Zone X" trailing digits if present)
-  const zoneName =
-    base?.name && /\d+$/.test(base.name)
-      ? base.name.replace(/\d+$/, String(zoneIndexNumber + 1))
-      : `Zone ${zoneIndexNumber + 1}`;
-
-  // Duplicate enclosures (preserve inputs/config, clear results)
-  const enclosures =
-    (base?.enclosures ?? []).map((e: any, j: number) => {
-      const newEncId = makeId("enc");
-      const encName =
-        e?.name && /\d+$/.test(e.name)
-          ? e.name.replace(/\d+$/, String(j + 1))
-          : `Enclosure ${j + 1}`;
-
-      // Keep inputs/config; drop most calc outputs
-      const {
-        // known calc outputs to clear
-        minEmitters,
-        emitterCount,
-        cylinderCount,
-        estDischarge,
-        estFinalO2,
-        qWater_gpm,
-        qWaterTotal_gpm,
-        estWater_gal,
-        // potential aliases
-        estimatedDischarge,
-        o2Final,
-        ...rest
-      } = e || {};
-
-      return {
-        ...rest,
-        id: newEncId,
-        name: encName,
-        // Explicitly clear calc-y fields
-        minEmitters: undefined,
-        emitterCount: undefined,
-        cylinderCount: undefined,
-        estDischarge: undefined,
-        estFinalO2: undefined,
-        qWater_gpm: undefined,
-        qWaterTotal_gpm: undefined,
-        estWater_gal: undefined,
-      };
-    }) ?? [];
-
-  const {
-    // zone-level calc outputs to clear
-    minTotalCylinders,
-    q_n2_peak_scfm,
-    water_peak_gpm,
-    waterDischarge_gal,
-    waterTankMin_gal,
-    panelSizing,
-    designLabel,
-    ...restZone
-  } = base || {};
-
-  return {
-    ...restZone,
-    id: newZoneId,
-    name: zoneName,
-    enclosures,
-    minTotalCylinders: undefined,
-    q_n2_peak_scfm: undefined,
-    water_peak_gpm: undefined,
-    waterDischarge_gal: undefined,
-    waterTankMin_gal: undefined,
-    panelSizing: undefined,
-    designLabel: restZone?.designLabel ?? undefined,
-  };
-}
-
 function firstOrUndef<T>(arr: readonly T[]): T | undefined {
   return arr.length ? arr[0] : undefined;
 }
@@ -204,7 +122,38 @@ function coerceStyle(
   if (candidate && stylesFor.includes(candidate)) return candidate;
   return firstOrUndef(stylesFor);
 }
+// ---------- Label helpers (drop-in, no new files) ----------
+type HasIdName = { id: string; name?: string | null };
 
+function normName(v?: string | null) {
+  return (v ?? "").trim();
+}
+
+/** Generic: "System 1" or "System 1: Data Hall" */
+function formatIndexedName(base: string, index1: number, name?: string | null) {
+  const def = `${base} ${index1}`;
+  const n = normName(name);
+
+  if (!n || n === def) return def;
+  return `${def}: ${n}`;
+}
+
+/** Build a fast lookup so you can label-by-id anywhere */
+function makeLabelById<T extends HasIdName>(
+  items: T[] | undefined,
+  base: string
+) {
+  const arr = items ?? [];
+  const indexById = new Map<string, number>();
+  arr.forEach((it, i) => indexById.set(it.id, i));
+
+  return (id?: string | null) => {
+    if (!id) return "—";
+    const i = indexById.get(id);
+    if (i == null) return "—";
+    return formatIndexedName(base, i + 1, arr[i]?.name);
+  };
+}
 /** Make a "default" zone like clicking Add Zone for Engineered (empty enclosures). */
 function makeDefaultEmptyZone(nextIndex: number) {
   const m: MethodName = "NFPA 770 Class A/C";
@@ -250,51 +199,11 @@ function useResizeZones(systemId: string) {
         // Pre-engineered systems should never get zone-resized here
         if (system.type === "preengineered") return;
 
-        let nextZones = currentZones.slice();
-
-        if (target > curr) {
-          // Growth path
-          const toAdd = target - curr;
-          // Special rule: if no zones exist, first zone must be the *default* (like clicking Add Zone)
-          if (curr === 0) {
-            nextZones.push(makeDefaultEmptyZone(1));
-          }
-
-          // For remaining additions (or all additions if curr > 0), duplicate the *last* zone each time
-          for (let i = 0; i < toAdd - (curr === 0 ? 1 : 0); i++) {
-            const base =
-              nextZones[nextZones.length - 1] ??
-              currentZones[currentZones.length - 1];
-            const cloned = cloneZoneWithNewIds(base, nextZones.length);
-            nextZones.push(cloned);
-          }
-        } else {
-          // Shrink path: trim from the end
-          nextZones = nextZones.slice(0, target);
-        }
-
-        // Preferred mutators from your store
-        if (typeof model.setSystemZones === "function") {
-          model.setSystemZones(systemId, nextZones);
-          return;
-        }
-        if (typeof model.updateSystem === "function") {
-          model.updateSystem(systemId, { zones: nextZones });
-          return;
-        }
-        if (typeof model.setProject === "function") {
-          const nextProj = { ...project };
-          nextProj.systems = project.systems.map((s: any) =>
-            s.id === systemId ? { ...s, zones: nextZones } : s
-          );
-          model.setProject(nextProj);
-          return;
-        }
+        // ✅ Prefer existing store mutators so behavior matches "+ Add Zone"
         if (
           typeof model.addZone === "function" &&
           typeof model.removeZone === "function"
         ) {
-          // Fallback to iterative add/remove using exposed mutators
           if (target > curr) {
             for (let i = curr; i < target; i++) model.addZone(systemId);
           } else {
@@ -305,16 +214,6 @@ function useResizeZones(systemId: string) {
           }
           return;
         }
-
-        // Last-resort: broadcast an event for external handlers
-        window.dispatchEvent(
-          new CustomEvent("vortex:resize-zones", {
-            detail: { systemId, zones: nextZones },
-          })
-        );
-        console.warn(
-          "[SystemOptionsPanel] No zone update mutator found; dispatched 'vortex:resize-zones' event."
-        );
       } catch (err) {
         console.error("[SystemOptionsPanel] resizeZones error:", err);
       }
@@ -364,6 +263,12 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
     const n = Math.max(0, Math.floor(Number(raw) || 0));
     resizeZones(n);
   };
+  const sysIdx = project.systems.findIndex((s) => s.id === systemId);
+  const sysNumber = sysIdx >= 0 ? sysIdx + 1 : 0;
+  const sysLabel =
+    sysNumber > 0
+      ? formatIndexedName("System", sysNumber, system?.name)
+      : system?.name || "Untitled System";
 
   return (
     <div className={styles.panel} id={`system-panel-${systemId}`}>
@@ -372,12 +277,12 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
         className={styles.stickyBar}
         role="region"
         aria-label="System summary"
+        data-system-summary="1"
+        data-sys-summary="1"
       >
         <div className={styles.stickyMain}>
           <div className={styles.sysTitle}>
-            <span className={styles.sysName}>
-              {system.name || "Untitled System"}
-            </span>
+            <span className={styles.sysName}>{sysLabel}</span>
             <span
               className={`${styles.sysType} ${
                 systemType.startsWith("Engineered")
@@ -391,7 +296,9 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
           <div className={styles.sysKpis}>
             {opts.kind !== "preengineered" && (
               <div className={styles.kpi}>
-                <span className={styles.kpiLabel}>Total Zones</span>
+                <span className={styles.kpiLabel}>
+                  <strong>Total Zones</strong>
+                </span>
                 <span className={styles.kpiValue}>
                   <input
                     className={styles.kpiInput}
@@ -423,17 +330,23 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
               </div>
             )}
             <div className={styles.kpi}>
-              <span className={styles.kpiLabel}>Total Enclosures</span>
+              <span className={styles.kpiLabel}>
+                <strong>Total Enclosures</strong>
+              </span>
               <span className={styles.kpiValue}>{totalEnclosures}</span>
             </div>
             <div className={styles.kpi}>
-              <span className={styles.kpiLabel}>{storageLabel}</span>
+              <span className={styles.kpiLabel}>
+                <strong>{storageLabel}</strong>
+              </span>
               <span className={styles.kpiValue}>
                 {Number.isFinite(storageCount) ? storageCount : "—"}
               </span>
             </div>
             <div className={styles.kpi}>
-              <span className={styles.kpiLabel}>Total Nozzles</span>
+              <span className={styles.kpiLabel}>
+                <strong>Total Nozzles</strong>
+              </span>
               <span className={styles.kpiValue}>
                 {Number.isFinite(totalNozzles) ? totalNozzles : "—"}
               </span>
@@ -441,22 +354,23 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
           </div>
         </div>
       </div>
-
-      {/* Options body */}
-      {opts.kind === "engineered" ? (
-        <EngineeredForm
-          systemId={systemId}
-          opts={opts}
-          projectCurrency={project.currency}
-          systemUnits={project.units}
-        />
-      ) : (
-        <PreForm
-          systemId={systemId}
-          opts={opts as PreEngineeredOptions}
-          projectCurrency={project.currency}
-        />
-      )}
+      <div className={styles.panelBody}>
+        {/* Options body */}
+        {opts.kind === "engineered" ? (
+          <EngineeredForm
+            systemId={systemId}
+            opts={opts}
+            projectCurrency={project.currency}
+            systemUnits={project.units}
+          />
+        ) : (
+          <PreForm
+            systemId={systemId}
+            opts={opts as PreEngineeredOptions}
+            projectCurrency={project.currency}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -477,9 +391,7 @@ function EngineeredForm({
   const { project, updateSystemOptions } = useAppModel();
   const system = project.systems.find((s) => s.id === systemId);
   const t = system?.systemTotals;
-  const zoneNameById = (id?: string | null) =>
-    system?.zones.find((z) => z.id === id)?.name || "—";
-
+  const zoneLabelById = makeLabelById(system?.zones, "Zone");
   const n = (x?: number | null) =>
     typeof x === "number" && Number.isFinite(x) ? x.toLocaleString() : "—";
 
@@ -509,22 +421,23 @@ function EngineeredForm({
   return (
     <div className={styles.sysOptionsLayout}>
       {/* Row 1 – System options in a responsive grid of blocks */}
-      <section className={styles.optionRow}>
+      <section className={styles.optionRow} data-tour="system-config">
         <div className={styles.rowHeading}>System Configuration</div>
         <div className={styles.optionGrid}>
           <div className={styles.fieldBlock}>
-            <label>Fill Pressure</label>
+            <label>Refill Pressure</label>
             <select
               className={styles.inputControl}
               value={
                 opts.bulkTubes ? BULK_TUBE_FILL_PRESSURE : opts.fillPressure
               }
-              onChange={(e) =>
+              disabled={!!opts.bulkTubes}
+              onChange={(e) => {
+                if (opts.bulkTubes) return; // bulk tubes locks this dropdown
                 updateSystemOptions(systemId, {
                   fillPressure: e.target.value as any,
-                })
-              }
-              disabled={!!opts.bulkTubes}
+                });
+              }}
             >
               {FILL_PRESSURES.map((fp) => (
                 <option key={fp} value={fp}>
@@ -634,7 +547,7 @@ function EngineeredForm({
       </section>
 
       {/* Row 2 – Add-ons across the row */}
-      <section className={styles.optionRow}>
+      <section className={styles.optionRow} data-tour="system-addons">
         <div className={styles.rowHeading}>Add-ons</div>
 
         <div className={styles.addonsGrid}>
@@ -733,7 +646,6 @@ function EngineeredForm({
                     const pick = bulkTubeByValue(currentVal);
                     updateSystemOptions(systemId, {
                       bulkTubes: true,
-                      fillPressure: BULK_TUBE_FILL_PRESSURE,
                       bulkTubeSize: pick.value,
                       bulkTubeLabel: pick.label,
                       bulkTubeNitrogenSCF: pick.scf,
@@ -767,7 +679,6 @@ function EngineeredForm({
                   const pick = bulkTubeByValue(val);
                   updateSystemOptions(systemId, {
                     bulkTubes: true,
-                    fillPressure: BULK_TUBE_FILL_PRESSURE,
                     bulkTubeSize: pick.value,
                     bulkTubeLabel: pick.label,
                     bulkTubeNitrogenSCF: pick.scf,
@@ -791,7 +702,7 @@ function EngineeredForm({
         <div className={styles.rowHeading}>Estimates &amp; System Results</div>
         <div className={styles.resultsPairGrid}>
           {/* Estimated values table */}
-          <div>
+          <div data-tour="est-vals">
             <table className={`${styles.resultsTable} ${styles.estTable}`}>
               <thead>
                 <tr>
@@ -927,7 +838,7 @@ function EngineeredForm({
           </div>
 
           {/* System results table */}
-          <div className={styles.estimateCol}>
+          <div className={styles.estimateCol} data-tour="system-results">
             {!t ? (
               <div className={styles.muted}>Run Calculate to see totals.</div>
             ) : (
@@ -941,13 +852,11 @@ function EngineeredForm({
                 </thead>
                 <tbody>
                   <tr>
-                    <td colSpan={3} className={styles.kvLabel}>
-                      <div>
-                        <strong>
-                          Zone Driving N₂ Storage:
-                          {zoneNameById(t.governingNitrogenZoneId)}
-                        </strong>
-                      </div>
+                    <td className={styles.kvLabel}>
+                      <strong>Zone Driving N₂ Storage</strong>
+                    </td>
+                    <td className={styles.kvValue}>
+                      {zoneLabelById(t.governingNitrogenZoneId) || "—"}
                     </td>
                   </tr>
                   <tr>
@@ -969,13 +878,11 @@ function EngineeredForm({
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className={styles.kvLabel}>
-                      <div>
-                        <strong>
-                          Zone Driving Water Storage:
-                          {zoneNameById(t.governingWaterZoneId)}
-                        </strong>
-                      </div>
+                    <td className={styles.kvLabel}>
+                      <strong>Zone Driving Water Storage</strong>
+                    </td>
+                    <td className={styles.kvValue}>
+                      {zoneLabelById(t.governingWaterZoneId) || "—"}
                     </td>
                   </tr>
                   <tr>
@@ -1069,7 +976,7 @@ function PreForm({
         <div className={styles.rowHeading}>System Configuration</div>
         <div className={styles.optionGrid}>
           <div className={styles.fieldBlock}>
-            <label>Fill Pressure</label>
+            <label>Refill Pressure</label>
             <select
               className={styles.inputControl}
               value={opts.fillPressure}
@@ -1147,29 +1054,43 @@ function PreForm({
       {/* Row 2 – Add-ons */}
       <section className={styles.optionRow}>
         <div className={styles.rowHeading}>Add-ons</div>
-        <div className={styles.addonsRow}>
-          <label className={styles.blockCheck}>
-            <input
-              type="checkbox"
-              checked={opts.addOns.expProofTransducer}
-              onChange={(e) =>
-                setAddOn({ expProofTransducer: e.target.checked })
-              }
-              disabled={isLockedFromPartcode}
-            />
-            Explosion-proof pressure transducer
-          </label>
-          <label className={styles.blockCheck}>
-            <input
-              type="checkbox"
-              checked={opts.addOns.bulkRefillAdapter}
-              onChange={(e) =>
-                setAddOn({ bulkRefillAdapter: e.target.checked })
-              }
-              disabled={isLockedFromPartcode}
-            />
-            Include bulk cylinder refill adapter
-          </label>
+
+        <div className={styles.addonsGrid}>
+          <div className={styles.addonCol}>
+            <label className={styles.addonCheck}>
+              <input
+                type="checkbox"
+                checked={opts.addOns.expProofTransducer}
+                onChange={(e) =>
+                  setAddOn({ expProofTransducer: e.target.checked })
+                }
+                disabled={isLockedFromPartcode}
+              />
+              <span className={styles.addonLabelText}>
+                Explosion-proof pressure transducer
+              </span>
+            </label>
+          </div>
+
+          <div className={styles.addonCol}>
+            <label className={styles.addonCheck}>
+              <input
+                type="checkbox"
+                checked={opts.addOns.bulkRefillAdapter}
+                onChange={(e) =>
+                  setAddOn({ bulkRefillAdapter: e.target.checked })
+                }
+                disabled={isLockedFromPartcode}
+              />
+              <span className={styles.addonLabelText}>
+                Include bulk cylinder refill adapter
+              </span>
+            </label>
+          </div>
+
+          {/* Optional: keep 4-column visual consistency even with only 2 add-ons */}
+          <div className={styles.addonCol} aria-hidden="true" />
+          <div className={styles.addonCol} aria-hidden="true" />
         </div>
       </section>
 
@@ -1240,7 +1161,7 @@ function PreForm({
                   </tr>
                   <tr>
                     <td className={styles.kvLabel}>
-                      Cylinder Size @ Fill Pressure
+                      Cylinder Size @ Refill Pressure
                     </td>
                     <td className={styles.kvValue}>
                       {(enc as any)._cylinderLabel ?? "—"}
