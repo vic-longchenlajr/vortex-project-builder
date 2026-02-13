@@ -1,4 +1,3 @@
-// src/components/features/systems/SystemOptionsPanel.tsx
 import React from "react";
 import {
   useAppModel,
@@ -6,7 +5,10 @@ import {
   PreEngineeredOptions,
   FILL_PRESSURES,
   PRE_FILL_PRESSURES,
+  Enclosure,
+  WaterTankCert,
 } from "@/state/app-model";
+
 import {
   pickDefaultNozzle,
   getStylesFor,
@@ -15,10 +17,10 @@ import {
   EmitterStyleKey,
 } from "@/core/catalog/emitter.catalog";
 
-import type { Enclosure } from "@/state/app-model";
 import styles from "@/styles/systemoptionspanel.module.css";
-import type { WaterTankCert } from "@/state/app-model";
-import { asEngineeredOptions } from "@/core/calc/engineered/index";
+/* -------------------------------------------------------------------------- */
+/*                                  CONSTANTS                                 */
+/* -------------------------------------------------------------------------- */
 type Props = { systemId: string };
 
 const WATER_CERT_OPTIONS: { value: WaterTankCert; label: string }[] = [
@@ -37,6 +39,10 @@ const BULK_TUBE_OPTIONS: { value: string; label: string; scf: number }[] = [
   // { value: `12x24_2400`, label: `12' x 24" @ 2,400 psi`, scf: 4497 },
 ];
 
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
+
 function bulkTubeByValue(value?: string) {
   return (
     BULK_TUBE_OPTIONS.find((o) => o.value === value) ?? BULK_TUBE_OPTIONS[0]
@@ -47,6 +53,10 @@ function defaultCertForCurrency(curr: string | undefined): WaterTankCert {
   return curr === "USD" ? "ASME/FM" : "CE";
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                    HOOKS                                   */
+/* -------------------------------------------------------------------------- */
+
 function useSystemTotalsSnapshot(systemId: string) {
   const { project } = useAppModel();
   const system = project.systems.find((s) => s.id === systemId);
@@ -55,36 +65,35 @@ function useSystemTotalsSnapshot(systemId: string) {
   const totalZones = zones.length;
   const totalEnclosures = zones.reduce(
     (s, z) => s + (z.enclosures?.length ?? 0),
-    0
+    0,
   );
 
-  const bulkOn = !!(system?.options as any)?.bulkTubes;
-
-  // Sum tube mins across zones (or take max—see note below)
+  const bulkOn = !!(system?.options as any)?.usesBulkTubes;
   const totalTubes =
     (system as any)?.systemTotals?.totalBulkTubes ??
     zones.reduce((s, z) => s + (Number((z as any).minTotalTubes) || 0), 0);
 
-  // Existing cylinder logic
   const totalCylinders =
-    (system as any)?.systemTotals?.totalCylinders ??
-    zones.reduce((s, z) => s + (Number((z as any).minTotalCylinders) || 0), 0);
+    (system as any)?.systemTotals?.systemCylinderCount ??
+    zones.reduce(
+      (s, z) => s + (Number((z as any).requiredCylinderCount) || 0),
+      0,
+    );
 
-  // Pick the displayed “storage count”
   const storageCount = bulkOn ? totalTubes : totalCylinders;
   const storageLabel = bulkOn ? "Total Bulk Tubes" : "Total Cylinders";
 
-  // Count “nozzles” as minEmitters/emitterCount across all enclosures
   const totalNozzles = zones.reduce((s, z) => {
     const encs = z.enclosures ?? [];
     const add = encs.reduce((ss, e) => {
       const n =
-        Number((e as any).minEmitters) || Number((e as any).emitterCount) || 0;
+        Number((e as any).requiredNozzleCount) ||
+        Number((e as any).requiredNozzleCount) ||
+        0;
       return ss + (Number.isFinite(n) ? n : 0);
     }, 0);
     return s + add;
   }, 0);
-
   const systemType =
     (system?.type ?? (system?.options as any)?.kind) === "preengineered"
       ? "Pre-Engineered"
@@ -102,6 +111,9 @@ function useSystemTotalsSnapshot(systemId: string) {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                MORE HELPERS                                */
+/* -------------------------------------------------------------------------- */
 /** Create a fresh random-ish id when crypto isn't available. */
 function makeId(prefix: string) {
   return (
@@ -116,7 +128,7 @@ function firstOrUndef<T>(arr: readonly T[]): T | undefined {
 function coerceStyle(
   method: MethodName,
   nozzle: NozzleCode,
-  candidate?: EmitterStyleKey
+  candidate?: EmitterStyleKey,
 ): EmitterStyleKey | undefined {
   const stylesFor = getStylesFor(method, nozzle); // EmitterStyleKey[]
   if (candidate && stylesFor.includes(candidate)) return candidate;
@@ -141,7 +153,7 @@ function formatIndexedName(base: string, index1: number, name?: string | null) {
 /** Build a fast lookup so you can label-by-id anywhere */
 function makeLabelById<T extends HasIdName>(
   items: T[] | undefined,
-  base: string
+  base: string,
 ) {
   const arr = items ?? [];
   const indexById = new Map<string, number>();
@@ -152,31 +164,6 @@ function makeLabelById<T extends HasIdName>(
     const i = indexById.get(id);
     if (i == null) return "—";
     return formatIndexedName(base, i + 1, arr[i]?.name);
-  };
-}
-/** Make a "default" zone like clicking Add Zone for Engineered (empty enclosures). */
-function makeDefaultEmptyZone(nextIndex: number) {
-  const m: MethodName = "NFPA 770 Class A/C";
-  const n: NozzleCode = pickDefaultNozzle(m);
-  const s: EmitterStyleKey = coerceStyle(m, n)!;
-  return {
-    id: makeId("zone"),
-    name: `Zone ${nextIndex}`,
-    enclosures: [
-      {
-        id: makeId("enc"),
-        name: "Enclosure 1",
-        volume: 1000,
-        tempF: 70,
-        method: m,
-        nozzleCode: n,
-        emitterStyle: s,
-        customMinEmitters: null,
-        _editEmitters: false,
-      },
-    ] as Enclosure[],
-    customMinTotalCylinders: null as number | null,
-    _editCylinders: false,
   };
 }
 
@@ -218,7 +205,7 @@ function useResizeZones(systemId: string) {
         console.error("[SystemOptionsPanel] resizeZones error:", err);
       }
     },
-    [model, systemId]
+    [model, systemId],
   );
 }
 
@@ -227,27 +214,36 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
   const system = project.systems.find((s) => s.id === systemId)!;
   const opts = system.options;
 
-  const isPre = opts.kind === "preengineered";
+  const isPre = system.type === "preengineered";
   const preFill = (opts as any).fillPressure as string | undefined;
 
+  const isLockedFromPartcode = (opts as any).systemPartCodeLocked === true;
+
   React.useEffect(() => {
-    if (isPre && preFill && !PRE_FILL_PRESSURES.includes(preFill as any)) {
+    if (!isPre) return;
+    if (isLockedFromPartcode) return; // ✅ do not coerce when locked
+    if (preFill && !PRE_FILL_PRESSURES.includes(preFill as any)) {
       updateSystemOptions(systemId, { fillPressure: PRE_FILL_PRESSURES[0] });
     }
-  }, [isPre, preFill, systemId, updateSystemOptions]);
+  }, [isPre, isLockedFromPartcode, preFill, systemId, updateSystemOptions]);
   const waterTankCert = opts.waterTankCertification; // strongly typed
-  const legacyTank = opts.waterTank; // still WaterTankCert | null in your model now
+  const legacyTank = (opts as any).waterTank; // still WaterTankCert | null in your model now
   const defaultCert = defaultCertForCurrency(project.currency);
 
   React.useEffect(() => {
-    // If already set, do nothing
+    if (isLockedFromPartcode) return; // ✅ do nothing when locked
     if (waterTankCert) return;
 
-    // If legacy field exists, use it; otherwise fall back to default
     const next: WaterTankCert = legacyTank ?? defaultCert;
-
     updateSystemOptions(systemId, { waterTankCertification: next });
-  }, [waterTankCert, legacyTank, defaultCert, systemId, updateSystemOptions]);
+  }, [
+    isLockedFromPartcode,
+    waterTankCert,
+    legacyTank,
+    defaultCert,
+    systemId,
+    updateSystemOptions,
+  ]);
   // Sticky bar data + zone resizer
   const {
     systemType,
@@ -284,11 +280,10 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
           <div className={styles.sysTitle}>
             <span className={styles.sysName}>{sysLabel}</span>
             <span
-              className={`${styles.sysType} ${
-                systemType.startsWith("Engineered")
-                  ? styles.sysTypeEng
-                  : styles.sysTypePre
-              }`}
+              className={`${styles.sysType} ${systemType.startsWith("Engineered")
+                ? styles.sysTypeEng
+                : styles.sysTypePre
+                }`}
             >
               {systemType} Options
             </span>
@@ -375,7 +370,9 @@ export default function SystemOptionsPanel({ systemId }: { systemId: string }) {
   );
 }
 
-/* ------------ ENGINEERED ------------ */
+/* -------------------------------------------------------------------------- */
+/*                               ENGINEERED FORM                              */
+/* -------------------------------------------------------------------------- */
 
 function EngineeredForm({
   systemId,
@@ -391,6 +388,14 @@ function EngineeredForm({
   const { project, updateSystemOptions } = useAppModel();
   const system = project.systems.find((s) => s.id === systemId);
   const t = system?.systemTotals;
+  const governingWaterZone = system?.zones?.find(
+    (z: any) => z.id === (t as any)?.governingWaterZoneId,
+  );
+
+  const tankReqGal =
+    Number(governingWaterZone?.minWaterTankCapacityGal) ??
+    Number((t as any)?.requiredWaterTankCapacityGal);
+
   const zoneLabelById = makeLabelById(system?.zones, "Zone");
   const n = (x?: number | null) =>
     typeof x === "number" && Number.isFinite(x) ? x.toLocaleString() : "—";
@@ -399,7 +404,7 @@ function EngineeredForm({
     ((opts as any).waterTankCertification as WaterTankCert | undefined) ??
     defaultCertForCurrency(projectCurrency);
   const unitVol = systemUnits === "metric" ? "(L)" : "(gal)";
-  const editMap = ((opts as any)._editEstimates ?? {}) as Record<
+  const editMap = ((opts as any).estimateOverrides ?? {}) as Record<
     string,
     boolean
   >;
@@ -410,7 +415,7 @@ function EngineeredForm({
       ? opts.estimates
       : { ...opts.estimates, [k]: undefined as any };
     updateSystemOptions(systemId, {
-      _editEstimates: next as any,
+      estimateOverrides: next as any,
       estimates: nextEst,
     } as any);
   };
@@ -429,11 +434,11 @@ function EngineeredForm({
             <select
               className={styles.inputControl}
               value={
-                opts.bulkTubes ? BULK_TUBE_FILL_PRESSURE : opts.fillPressure
+                opts.usesBulkTubes ? BULK_TUBE_FILL_PRESSURE : opts.fillPressure
               }
-              disabled={!!opts.bulkTubes}
+              disabled={!!opts.usesBulkTubes}
               onChange={(e) => {
-                if (opts.bulkTubes) return; // bulk tubes locks this dropdown
+                if (opts.usesBulkTubes) return; // bulk tubes locks this dropdown
                 updateSystemOptions(systemId, {
                   fillPressure: e.target.value as any,
                 });
@@ -513,36 +518,6 @@ function EngineeredForm({
               <option value="240">240 VAC</option>
             </select>
           </div>
-
-          <div className={styles.fieldBlock}>
-            <label>Rundown Time (min)</label>
-            <input
-              className={styles.inputControl}
-              type="number"
-              min={0}
-              value={opts.rundownTimeMin}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  rundownTimeMin: Number(e.target.value) || 0,
-                })
-              }
-            />
-          </div>
-
-          <div className={styles.fieldBlock}>
-            <label>Est. Dry Water Pipe Vol. {unitVol}</label>
-            <input
-              className={styles.inputControl}
-              type="number"
-              min={0}
-              value={opts.estimatedPipeVolume}
-              onChange={(e) =>
-                updateSystemOptions(systemId, {
-                  estimatedPipeVolume: Number(e.target.value) || 0,
-                })
-              }
-            />
-          </div>
         </div>
       </section>
 
@@ -556,12 +531,12 @@ function EngineeredForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={opts.addOns.placardsAndSignage}
+                checked={opts.addOns.hasPlacardsAndSignage}
                 onChange={(e) =>
                   updateSystemOptions(systemId, {
                     addOns: {
                       ...opts.addOns,
-                      placardsAndSignage: e.target.checked,
+                      hasPlacardsAndSignage: e.target.checked,
                     },
                   })
                 }
@@ -585,7 +560,7 @@ function EngineeredForm({
                     },
                   })
                 }
-                disabled={!opts.addOns.placardsAndSignage}
+                disabled={!opts.addOns.hasPlacardsAndSignage}
               />
             </div>
           </div>
@@ -595,12 +570,12 @@ function EngineeredForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={opts.addOns.expProofTransducer}
+                checked={opts.addOns.isExplosionProof}
                 onChange={(e) =>
                   updateSystemOptions(systemId, {
                     addOns: {
                       ...opts.addOns,
-                      expProofTransducer: e.target.checked,
+                      isExplosionProof: e.target.checked,
                     },
                   })
                 }
@@ -616,12 +591,12 @@ function EngineeredForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={opts.addOns.igsFlexibleHose48}
+                checked={opts.addOns.hasIgsFlexibleHose48}
                 onChange={(e) =>
                   updateSystemOptions(systemId, {
                     addOns: {
                       ...opts.addOns,
-                      igsFlexibleHose48: e.target.checked,
+                      hasIgsFlexibleHose48: e.target.checked,
                     },
                   })
                 }
@@ -637,7 +612,7 @@ function EngineeredForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={!!opts.bulkTubes}
+                checked={!!opts.usesBulkTubes}
                 onChange={(e) => {
                   const on = e.target.checked;
 
@@ -645,15 +620,15 @@ function EngineeredForm({
                     const currentVal = opts.bulkTubeSize;
                     const pick = bulkTubeByValue(currentVal);
                     updateSystemOptions(systemId, {
-                      bulkTubes: true,
+                      usesBulkTubes: true,
                       bulkTubeSize: pick.value,
                       bulkTubeLabel: pick.label,
-                      bulkTubeNitrogenSCF: pick.scf,
+                      bulkTubeCapacityScf: pick.scf,
                     } as any);
                   } else {
                     updateSystemOptions(systemId, {
-                      bulkTubes: false,
-                      bulkTubeNitrogenSCF: null,
+                      usesBulkTubes: false,
+                      bulkTubeCapacityScf: null,
                     } as any);
                   }
                 }}
@@ -678,13 +653,13 @@ function EngineeredForm({
                   const val = e.target.value;
                   const pick = bulkTubeByValue(val);
                   updateSystemOptions(systemId, {
-                    bulkTubes: true,
+                    usesBulkTubes: true,
                     bulkTubeSize: pick.value,
                     bulkTubeLabel: pick.label,
-                    bulkTubeNitrogenSCF: pick.scf,
+                    bulkTubeCapacityScf: pick.scf,
                   } as any);
                 }}
-                disabled={!opts.bulkTubes}
+                disabled={!opts.usesBulkTubes}
               >
                 {BULK_TUBE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -734,7 +709,7 @@ function EngineeredForm({
                         onChange={(e) =>
                           setEst(
                             "primaryReleaseAssemblies",
-                            Number(e.target.value) || 0
+                            Number(e.target.value) || 0,
                           )
                         }
                         disabled={!editMap.primaryReleaseAssemblies}
@@ -764,7 +739,7 @@ function EngineeredForm({
                         onChange={(e) =>
                           setEst(
                             "doubleStackedRackHose",
-                            Number(e.target.value) || 0
+                            Number(e.target.value) || 0,
                           )
                         }
                         disabled={!editMap.doubleStackedRackHose}
@@ -792,7 +767,7 @@ function EngineeredForm({
                         onChange={(e) =>
                           setEst(
                             "adjacentRackHose",
-                            Number(e.target.value) || 0
+                            Number(e.target.value) || 0,
                           )
                         }
                         disabled={!editMap.adjacentRackHose}
@@ -827,11 +802,15 @@ function EngineeredForm({
                 </tr>
                 <tr>
                   <td className={styles.kvLabel}>Release Points</td>
-                  <td className={styles.kvValue}>{n(t?.estReleasePoints)}</td>
+                  <td className={styles.kvValue}>
+                    {n((t as any)?.estimatedReleasePoints)}
+                  </td>
                 </tr>
                 <tr>
                   <td className={styles.kvLabel}>Monitor Points</td>
-                  <td className={styles.kvValue}>{n(t?.estMonitorPoints)}</td>
+                  <td className={styles.kvValue}>
+                    {n((t as any)?.estimatedMonitorPoints)}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -861,20 +840,23 @@ function EngineeredForm({
                   </tr>
                   <tr>
                     <td className={styles.kvLabel}>
-                      {opts.bulkTubes
+                      {opts.usesBulkTubes
                         ? "Min. Required Bulk Tubes"
                         : "Total Cylinders"}
                     </td>
                     <td className={styles.kvValue}>
-                      {opts.bulkTubes
-                        ? n((t as any).totalBulkTubes ?? t.totalCylinders)
-                        : n(t.totalCylinders)}
+                      {opts.usesBulkTubes
+                        ? n(
+                          (t as any).systemBulkTubeCount ??
+                          (t as any).systemCylinderCount,
+                        )
+                        : n((t as any).systemCylinderCount)}
                     </td>
                   </tr>
                   <tr>
                     <td className={styles.kvLabel}>Total N₂ Delivered</td>
                     <td className={styles.kvValue}>
-                      {n(t.totalNitrogenDelivered_scf)} SCF
+                      {n((t as any).nitrogenDeliveredScf)} SCF
                     </td>
                   </tr>
                   <tr>
@@ -890,19 +872,17 @@ function EngineeredForm({
                       Min. Water Tank Requirement
                     </td>
                     <td className={styles.kvValue}>
-                      {typeof t?.waterTankRequired_gal === "number"
-                        ? `${Math.round(
-                            t.waterTankRequired_gal
-                          ).toLocaleString()} gal / ${Math.round(
-                            (t.waterTankRequired_gal || 0) * 3.78541
-                          ).toLocaleString()} L`
+                      {Number.isFinite(tankReqGal)
+                        ? `${Math.ceil(tankReqGal).toLocaleString()} gal / ${Math.ceil(
+                          tankReqGal * 3.78541,
+                        ).toLocaleString()} L`
                         : "—"}
                     </td>
                   </tr>
                   <tr>
                     <td className={styles.kvLabel}>Provided Water Tank</td>
                     <td className={styles.kvValue}>
-                      {opts.waterTankPickDesc || "—"}
+                      {opts.selectedWaterTankPartDesc || "—"}
                     </td>
                   </tr>
                 </tbody>
@@ -915,7 +895,9 @@ function EngineeredForm({
   );
 }
 
-/* ------------ PRE-ENGINEERED ------------ */
+/* -------------------------------------------------------------------------- */
+/*                             PRE-ENGINEERED FORM                            */
+/* -------------------------------------------------------------------------- */
 
 function PreForm({
   systemId,
@@ -931,15 +913,13 @@ function PreForm({
   const t = system?.systemTotals;
 
   const enc = system?.zones?.[0]?.enclosures?.[0] ?? {};
-  const minEmitters =
-    (enc as any).minEmitters ?? (enc as any).emitterCount ?? "—";
-  const cylinders = (enc as any).cylinderCount ?? "—";
-  const estDischarge =
-    (enc as any).estDischarge ?? (enc as any).estimatedDischarge ?? "—";
-  const estO2 = (enc as any).estFinalO2 ?? (enc as any).o2Final ?? "—";
+  const minEmitters = (enc as any).requiredNozzleCount ?? "—";
+  const cylinders = (enc as any).requiredCylinderCount ?? "—";
+  const estDischarge = (enc as any).estimatedDischargeDuration ?? "—";
+  const estO2 = (enc as any).estimatedFinalOxygenPercent ?? "—";
 
   const waterTankDesc =
-    (system?.options as any).waterTankPick?.description || "—";
+    (system?.options as any).selectedWaterTankPartDesc || "—";
 
   const certValue =
     ((opts as any).waterTankCertification as WaterTankCert | undefined) ??
@@ -951,23 +931,11 @@ function PreForm({
   const setAddOn = (patch: Partial<PreEngineeredOptions["addOns"]>) =>
     updateSystemOptions(systemId, { addOns: { ...opts.addOns, ...patch } });
 
-  // Live total volume from L/W/H
-  const L = Number((enc as any)?.length);
-  const W = Number((enc as any)?.width);
-  const H = Number((enc as any)?.height);
-  const hasDims = [L, W, H].every((v) => Number.isFinite(v) && v > 0);
   const unitVol = project.units === "metric" ? "m³" : "ft³";
-  const vol =
-    hasDims && Number.isFinite(L * W * H) ? (L as number) * W * H : null;
-  const volStr =
-    vol == null
-      ? "—"
-      : vol.toLocaleString(undefined, {
-          maximumFractionDigits: project.units === "metric" ? 3 : 0,
-        });
-  const locked = !!(
-    project.systems.find((s) => s.id === systemId)?.options as any
-  )?.systemPartCodeLocked;
+  const vol = Number((enc as Enclosure).volumeFt3) || 0;
+  const volStr = vol.toLocaleString(undefined, {
+    maximumFractionDigits: project.units === "metric" ? 3 : 0,
+  });
 
   return (
     <div className={styles.sysOptionsLayout}>
@@ -1060,9 +1028,9 @@ function PreForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={opts.addOns.expProofTransducer}
+                checked={opts.addOns.isExplosionProof}
                 onChange={(e) =>
-                  setAddOn({ expProofTransducer: e.target.checked })
+                  setAddOn({ isExplosionProof: e.target.checked })
                 }
                 disabled={isLockedFromPartcode}
               />
@@ -1076,9 +1044,9 @@ function PreForm({
             <label className={styles.addonCheck}>
               <input
                 type="checkbox"
-                checked={opts.addOns.bulkRefillAdapter}
+                checked={(opts.addOns as any).hasBulkRefillAdapter}
                 onChange={(e) =>
-                  setAddOn({ bulkRefillAdapter: e.target.checked })
+                  setAddOn({ hasBulkRefillAdapter: e.target.checked } as any)
                 }
                 disabled={isLockedFromPartcode}
               />
@@ -1112,16 +1080,16 @@ function PreForm({
                 <tr>
                   <td className={styles.kvLabel}>Release Points</td>
                   <td className={styles.kvValue}>
-                    {typeof t?.estReleasePoints === "number"
-                      ? t.estReleasePoints.toLocaleString()
+                    {typeof (t as any)?.estimatedReleasePoints === "number"
+                      ? (t as any).estimatedReleasePoints.toLocaleString()
                       : "—"}
                   </td>
                 </tr>
                 <tr>
                   <td className={styles.kvLabel}>Monitor Points</td>
                   <td className={styles.kvValue}>
-                    {typeof t?.estMonitorPoints === "number"
-                      ? t.estMonitorPoints.toLocaleString()
+                    {typeof (t as any)?.estimatedMonitorPoints === "number"
+                      ? (t as any).estimatedMonitorPoints.toLocaleString()
                       : "—"}
                   </td>
                 </tr>
@@ -1146,7 +1114,7 @@ function PreForm({
                   <tr>
                     <td className={styles.kvLabel}>Total Volume</td>
                     <td className={styles.kvValue}>
-                      {locked
+                      {isLockedFromPartcode
                         ? "Overridden by system partcode lock"
                         : `${volStr} ${unitVol}`}
                     </td>
@@ -1164,7 +1132,7 @@ function PreForm({
                       Cylinder Size @ Refill Pressure
                     </td>
                     <td className={styles.kvValue}>
-                      {(enc as any)._cylinderLabel ?? "—"}
+                      {(enc as any).cylinderLabel ?? "—"}
                     </td>
                   </tr>
                   <tr>
@@ -1174,7 +1142,7 @@ function PreForm({
                   <tr>
                     <td className={styles.kvLabel}>Estimated Final O₂</td>
                     <td className={styles.kvValue}>
-                      {locked
+                      {isLockedFromPartcode
                         ? "Overridden by system partcode lock"
                         : `${estO2} `}
                     </td>

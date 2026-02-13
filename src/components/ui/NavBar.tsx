@@ -1,14 +1,15 @@
 // src/components/ui/NavBar.tsx
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import clsx from "clsx";
+
 import styles from "@/styles/navbar.module.css";
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/configurator", label: "Configurator" },
+  { href: "/builder", label: "Builder" },
   { href: "/guide", label: "Guide" },
   // { href: "/contact-us", label: "Contact Us" },
 ];
@@ -21,6 +22,9 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                   NAVBAR                                   */
+/* -------------------------------------------------------------------------- */
 export default function NavBar() {
   const { pathname } = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);

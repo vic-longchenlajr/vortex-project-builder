@@ -1,6 +1,6 @@
-# Victaulic Vortex™ Project Configurator
+# Victaulic Vortex™ Project Builder
 
-The **Victaulic Vortex Project Configurator** is a next-generation desktop and web application for designing, validating, and estimating **Victaulic Vortex™ hybrid fire suppression systems**.  
+The **Victaulic Vortex Project Builder** is a next-generation desktop and web application for designing, validating, and estimating **Victaulic Vortex™ hybrid fire suppression systems**.  
 It provides engineers, estimators, and project managers with a fast and reliable way to configure both **engineered** and **pre-engineered** systems, verify design rules, calculate nitrogen and water requirements, and generate a complete **Excel Bill of Materials** for review or ordering.
 
 ---
@@ -20,7 +20,7 @@ It provides engineers, estimators, and project managers with a fast and reliable
 
 ### Validation & Status Feedback
 
-The configurator provides real-time validation via a centralized Status Console:
+The builder provides real-time validation via a centralized Status Console:
 
 - Errors, Warnings, and Info messages are grouped by severity
 - Messages include system, zone, and enclosure context
@@ -62,7 +62,7 @@ The configurator provides real-time validation via a centralized Status Console:
 
 1. **Unzip** the attached installation package and open the extracted folder.
 2. **Double-click:**  
-   `Victaulic-Vortex-Project-Configurator-Setup-v2.x.x.exe`
+   `Victaulic-Vortex-Project-Builder-Setup-v2.x.x.exe`
    > The installation may take **15–30 seconds with no progress bar** — this is normal.
 3. Installation is complete when the **green installer window closes automatically.**  
    The app will launch right after installation.
@@ -77,7 +77,7 @@ If you need to locate where the app was installed:
 
 1. Press **Windows Key + R** to open the **Run** command.
 2. Paste in the following path and press **Enter:**  
-   `%LocalAppData%\VictaulicVortexProjectConfigurator`
+   `%LocalAppData%\VictaulicVortexProjectBuilder`
 
 ---
 
@@ -95,7 +95,7 @@ Final system designs must be reviewed and approved in accordance with applicable
 
 ## 🧭 Repository Information
 
-**Repository Name:** `victaulic-vortex-project-configurator`  
+**Repository Name:** `victaulic-vortex-project-builder`  
 **Version:** 2.1.1
 **License:** Internal Use – Victaulic Fire Suppression Technology  
 **Maintainer:** Fire Suppression Engineering – Easton, PA

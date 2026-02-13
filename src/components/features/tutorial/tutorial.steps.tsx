@@ -1,6 +1,10 @@
-import Link from "next/link";
 import React from "react";
+import Link from "next/link";
 import type { Step } from "react-joyride";
+
+/* -------------------------------------------------------------------------- */
+/*                                 CONSTANTS                                  */
+/* -------------------------------------------------------------------------- */
 
 const STORAGE_KEY = "vv_tutorial_seen_v1";
 export const TUTORIAL_VERSION = "v1";
@@ -15,8 +19,7 @@ export const tutorialSteps: Step[] = [
         </div>
 
         <div style={{ marginTop: 8 }}>
-          Welcome to the{" "}
-          <strong>Victaulic Vortex™ Project Configurator</strong>.
+          Welcome to the <strong>Victaulic Vortex™ Project Builder</strong>.
         </div>
 
         <div style={{ marginTop: 10 }}>
@@ -33,15 +36,36 @@ export const tutorialSteps: Step[] = [
 
         <div
           style={{
-            marginTop: 12,
-            borderRadius: 8,
-            background: "rgba(255, 105, 0, 0.10)",
-            border: "1px solid rgba(255, 105, 0, 0.25)",
-            color: "#9a3412",
+            marginTop: 14,
+            marginInline: "auto",
+            maxWidth: 400,
+            padding: "12px 14px",
+            borderRadius: 10,
+            background: `rgba(245, 158, 11, 0.14)`,
+            border: `1px solid #f59e0b`,
+            color: "#92400e",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          This release includes <strong>significant updates</strong>. Read each
-          step before continuing.
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 800,
+              letterSpacing: "0.02em",
+              textTransform: "uppercase",
+              marginBottom: 4,
+              alignSelf: "center",
+              opacity: 0.85,
+            }}
+          >
+            Notice
+          </div>
+
+          <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+            This release includes <strong>significant updates</strong>. Read
+            each step before continuing.
+          </div>
         </div>
 
         <div style={{ marginTop: 10 }}>

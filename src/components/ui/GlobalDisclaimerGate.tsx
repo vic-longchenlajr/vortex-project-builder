@@ -8,9 +8,16 @@ import {
 
 import styles from "@/styles/globaldisclaimergate.module.css";
 
+/* -------------------------------------------------------------------------- */
+/*                          GLOBAL DISCLAIMER GATE                            */
+/* -------------------------------------------------------------------------- */
+/**
+ * A modal gate that forces the user to acknowledge disclaimers before usage.
+ * Controlled by local storage version flags.
+ */
 type Props = {
   pathname?: string;
-  onOpenChange?: (open: boolean) => void; // ✅ add
+  onOpenChange?: (open: boolean) => void;
 };
 
 export default function GlobalDisclaimerGate({
@@ -39,7 +46,7 @@ export default function GlobalDisclaimerGate({
           <div>
             <div className={styles.title}>Calculation update notice</div>
             <div className={styles.body}>
-              This configurator includes design methodology updates that are{" "}
+              This builder includes design methodology updates that are{" "}
               <span className={styles.strong}>
                 not yet reflected in the currently published manuals
               </span>

@@ -1,4 +1,3 @@
-// src/state/app-model.tsx
 import React, {
   createContext,
   useContext,
@@ -7,6 +6,20 @@ import React, {
   useEffect,
   useRef,
 } from "react";
+import { saveAs } from "file-saver";
+
+import { collectBOM } from "@/core/bom/collect-project";
+import { buildWorkbookForProject } from "@/core/bom/excel";
+import { syncPointsFromBOM } from "@/core/bom/facp-sync";
+import { fetchPriceIndex } from "@/core/bom/priceList";
+import type { EngineeredBomBySystem, PriceIndex } from "@/core/bom/types";
+
+import { calculateEngineered } from "@/core/calc/engineered";
+import { calculatePreEngineered } from "@/core/calc/preengineered";
+import {
+  decodeSystemPartcodeToConfig,
+  buildPreEngSystemPartcodeFromConfig,
+} from "@/core/calc/preengineered/partcode";
 
 import {
   pickDefaultNozzle,
@@ -16,10 +29,13 @@ import {
   NozzleCode,
   EmitterStyleKey,
 } from "@/core/catalog/emitter.catalog";
-import { calculateEngineered } from "@/core/calc/engineered";
-import { calculatePreEngineered } from "@/core/calc/preengineered";
-import { saveAs } from "file-saver";
+import type { Codes } from "@/core/catalog/parts.constants";
 
+import {
+  saveTextFileSmart,
+  openTextFileSmart,
+  saveBinaryFileSmart,
+} from "@/core/io/file-bridge";
 import {
   makeSnapshotV1,
   parseSnapshot,
@@ -27,30 +43,14 @@ import {
   readFileAsText,
 } from "@/core/io/project-io";
 
-import { collectBOM } from "@/core/bom/collect-project";
-import { buildWorkbookForProject } from "@/core/bom/excel";
-import { fetchPriceIndex } from "@/core/bom/priceList";
-import type { EngineeredBomBySystem, PriceIndex } from "@/core/bom/types";
-import { syncPointsFromBOM } from "@/core/bom/facp-sync";
-import {
-  saveTextFileSmart,
-  openTextFileSmart,
-  saveBinaryFileSmart,
-} from "@/core/io/file-bridge";
-
 import type { ErrorCode } from "@/core/status/error-codes";
 import { statusFromCode } from "@/core/status/error-codes";
-import { decodeSystemPartcodeToConfig } from "@/core/calc/preengineered/partcode";
-import type { Codes } from "@/core/catalog/parts.constants";
-/* ─────────────────────────────────────────────────────────────
-   TYPES
-   ───────────────────────────────────────────────────────────── */
-function makeId(prefix: string) {
-  return (
-    (globalThis.crypto?.randomUUID?.() as string) ||
-    `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`
-  );
-}
+
+import { migrateLegacyProject } from "@/core/io/migrations";
+
+/* -------------------------------------------------------------------------- */
+/*                                    TYPES                                   */
+/* -------------------------------------------------------------------------- */
 
 export type SystemType = "engineered" | "preengineered";
 export type Currency = "USD" | "EUR" | "GBP";
@@ -64,6 +64,7 @@ export type PanelSizing = {
   style: "ar" | "dc";
 };
 export type DesignLabel = "data_proc" | "comb_turb" | "spec_hazards";
+export type CylinderSupplyMode = "FACTORY_FILL" | "LOCAL_FILL";
 
 export type StatusMessage = {
   id: string;
@@ -79,36 +80,37 @@ export type StatusMessage = {
 export type Enclosure = {
   id: string;
   name: string;
-  volume: number;
-  tempF: number;
-  method:
-    | "NFPA 770 Class A/C"
-    | "NFPA 770 Class B"
-    | "FM Data Centers"
-    | "FM Machine Spaces/Turbines";
+  volumeFt3: number;
+  temperatureF: number;
+  designMethod:
+  | "NFPA 770 Class A/C"
+  | "NFPA 770 Class B"
+  | "FM Data Centers"
+  | "FM Machine Spaces/Turbines";
   length?: number;
   width?: number;
   height?: number;
 
-  nozzleCode?: NozzleCode;
-  emitterStyle?: EmitterStyleKey;
+  nozzleModel?: NozzleCode;
+  nozzleOrientation?: EmitterStyleKey;
 
   // results...
-  minEmitters?: number;
-  cylinderCount?: number;
+  requiredNozzleCount?: number;
+  requiredCylinderCount?: number;
 
-  customMinEmitters?: number | null;
-  _editEmitters?: boolean;
+  customNozzleCount?: number | null;
+  /** UI Flag: User has manually overridden the nozzle count */
+  isNozzleCountOverridden?: boolean;
 
-  estDischarge?: string;
-  estFinalO2?: string;
+  estimatedDischargeDuration?: string;
+  estimatedFinalOxygenPercent?: string;
 
   /** NEW: label for flow cartridge selection (from nozzle SCFM) */
   flowCartridge?: string;
 
-  qWater_gpm?: number;
-  qWaterTotal_gpm?: number;
-  estWater_gal?: number;
+  waterFlowRateGpm?: number;
+  totalWaterFlowRateGpm?: number;
+  estimatedWaterVolumeGal?: number;
   notes?: string[];
 };
 
@@ -118,31 +120,39 @@ export type Zone = {
   enclosures: Enclosure[];
 
   // existing calc outputs
-  minTotalCylinders?: number;
-  totalNitrogenDelivered_scf?: number;
-  totalNitrogenRequired_scf?: number;
+  requiredCylinderCount?: number;
+  nitrogenDeliveredScf?: number;
+  nitrogenRequiredScf?: number;
   // NEW: user inputs
-  pipeDryVolumeGal?: number;
-  overrideCylinders?: number | null;
-
+  pipeVolumeGal?: number | null;
+  customCylinderCount?: number | null;
+  rundownTimeMin?: number | null;
   // ui overrides (cylinders)
-  customMinTotalCylinders?: number | null;
-  _editCylinders?: boolean;
+  /** UI Flag: User has manually overridden the cylinder count */
+  isCylinderCountOverridden?: boolean;
 
   // NEW: calc outputs for BOM/sizing
-  q_n2_peak_scfm?: number;
-  water_peak_gpm?: number;
-  waterDischarge_gal?: number;
-  waterTankMin_gal?: number;
+  peakNitrogenFlowRateScfm?: number;
+  peakWaterFlowRateGpm?: number;
+  waterDischargeVolumeGal?: number;
+  minWaterTankCapacityGal?: number;
 
   // NEW: make these official so zone.panelSizing works
   panelSizing?: PanelSizing;
   designLabel?: DesignLabel;
 
   bulkValveOpenTimeMin?: number;
-  _editBulkValveOpenTimeMin?: boolean;
+  isBulkValveOpenTimeOverridden?: boolean;
   bulkValveOpenTimeMinRequired?: number;
   minTotalTubes?: number;
+
+  panelSizingByPressure?: Array<{
+    psi: number;
+    bore: "1in" | "1.5in";
+    capacity: 1800 | 4500;
+    qty: number;
+    style: "ar" | "dc";
+  }>;
 };
 
 export type System = {
@@ -160,17 +170,17 @@ export type SystemTotals = {
   governingNitrogenZoneId?: string | null;
   governingWaterZoneId?: string | null;
   // Core totals
-  totalCylinders?: number; // from zone with MOST cylinders
-  totalNitrogenRequired_scf: number; // from zone with LARGEST N2 requirement
-  totalNitrogenDelivered_scf: number;
-  dischargePanels_qty: number; // sum of zone panelSizing.qty
-  waterTankRequired_gal: number; // max zone waterTankMin_gal
-  waterRequirement_gal: number; // max zone waterDischarge_gal
-  waterTankPick?: Codes;
+  systemCylinderCount?: number; // from zone with MOST cylinders
+  nitrogenRequiredScf: number; // from zone with LARGEST N2 requirement
+  nitrogenDeliveredScf: number;
+  dischargePanelCount: number; // sum of zone panelSizing.qty
+  requiredWaterTankCapacityGal: number; // max zone waterTankMin_gal
+  waterRequirementGal: number; // max zone waterDischarge_gal
+  selectedWaterTankPartCode?: Codes;
   // FACP estimates (already computed per system)
-  estReleasePoints: number;
-  estMonitorPoints: number;
-  estBatteryBackups: number;
+  estimatedReleasePoints: number;
+  estimatedMonitorPoints: number;
+  estimatedBatteryBackups: number;
 };
 
 export type Project = {
@@ -184,15 +194,19 @@ export type Project = {
   currency: Currency;
   units: Units;
   elevation: string; // e.g. "-3000FT/-0.92KM"
+  cylinderSupply: CylinderSupplyMode;
   systems: System[];
-  customerMultiplier: number;
+  priceMultiplierEngineered?: number; // NEW: 0.35 default
+  priceMultiplierPreEngineered?: number; // NEW: 0.30 default
 };
 
-type SystemAddOnsBase = {
-  placardsAndSignage: boolean;
-  doorCount: number;
-  bulkRefillAdapter: boolean;
-  expProofTransducer: boolean;
+export type SystemAddOns = {
+  hasPlacardsAndSignage: boolean;
+  hasBulkRefillAdapter: boolean;
+  isExplosionProof: boolean;
+  hasWaterFlexLine: boolean; // only engraved/pre-eng?
+  hasIgsFlexibleHose48: boolean; // eng only
+  doorCount: number; // applies if placards=true
 };
 
 export type EngineeredEstimates = {
@@ -235,57 +249,104 @@ export const PRE_FILL_PRESSURES = [
 ] as const;
 export type PreFillPressure = (typeof PRE_FILL_PRESSURES)[number];
 
+export type PrimariesPlan = {
+  maxBankSize: number; // 24
+  bulkSelected: boolean;
+
+  // Zone-level inputs (post-calc)
+  zoneCylinders: Array<{
+    zoneId: string;
+    zoneName: string;
+    requiredCyl: number;
+  }>;
+
+  // unique sorted groups (like Excel UNIQUE+SORT)
+  groupsUniqueSorted: number[];
+  maxCyl: number;
+
+  // The two methods
+  calcPrimaries: number; // method 2: sum ceil(diff/24)
+  maxPrimaries: number; // method 1: constructive
+  primariesUsed: number;
+  methodUsed: "calc" | "max";
+
+  // “banks” is the core deliverable for designers
+  banks: Array<{
+    bankIndex: number; // 1-based
+    size: number;
+  }>;
+
+  // Release groups per zone (bank combinations)
+  releaseGroups: Array<{
+    zoneId: string;
+    zoneName: string;
+    requiredCyl: number;
+    bankIndices: number[]; // which banks to open
+    totalCyl: number; // sum(banks)
+  }>;
+};
+
 export type EngineeredOptions = {
   kind: "engineered";
+  // Core System Setup
   fillPressure: FillPressure;
   refillAdapter: RefillAdapter | null;
-  waterTank: WaterTankCert | null;
   powerSupply: PowerSupply | null;
   panelStyle: PanelStyle;
-  bulkTubes: boolean;
-  rundownTimeMin: number;
-  estimatedPipeVolume?: number; // gal in US units, liters in metric UI (converted in calc)
-  addOns: SystemAddOnsBase & {
-    waterFlexLine: boolean;
-    igsFlexibleHose48: boolean;
-  };
-  editValues: boolean; // UI knobs for overriding calc results
-  _editEstimates?: Partial<Record<keyof EngineeredEstimates, boolean>>;
+
+  // Storage
+  usesBulkTubes: boolean;
+  bulkTubeSize?: string | null;
+  bulkTubeLabel?: string | null;
+  bulkTubeCapacityScf?: number | null; // was bulkTubeNitrogenSCF
+  isBulkTubesEligible?: boolean; // was bulkTubesEligible
+
+  // Water
+  selectedWaterTankPartCode?: Codes | null; // was waterTankPick
+  selectedWaterTankPartDesc?: string | null; // was waterTankPickDesc
+  waterTankCertification?: WaterTankCert | null;
+  requiredWaterTankCapacityGal?: number; // was waterTankRequired_gal
+
+  // Estimation / UI
+  isEstimateEditingEnabled: boolean; // was editValues
+  estimateOverrides?: Partial<Record<keyof EngineeredEstimates, boolean>>; // was _editEstimates (careful map)
   estimates: EngineeredEstimates;
-  // Bulk tube order form selections
-  bulkTubeSize?: string | null; // key/id for selected size
-  bulkTubeLabel?: string | null; // display label
-  bulkTubeNitrogenSCF?: number | null; // capacity (assume qty=1 for now)
-  waterTankRequired_gal?: number; // from calc (for BOM sync)
-  waterTankPick?: Codes; // from calc (for BOM sync)
-  waterTankPickDesc?: string;
-  waterTankCertification?: WaterTankCert;
-  bulkTubesEligible?: boolean;
+  primariesPlan?: PrimariesPlan;
+
+  // Hardware Addons
+  addOns: SystemAddOns;
 };
 
 export type PreEngineeredOptions = {
   kind: "preengineered";
   fillPressure: PreFillPressure;
   refillAdapter: RefillAdapter | null;
-  waterTank: WaterTankCert | null;
-  waterTankRequired_gal?: number; // from calc (for BOM sync)
-  waterTankPick?: Codes; // from calc (for BOM sync)
-  waterTankPickDesc?: string;
-  waterTankCertification?: WaterTankCert;
   powerSupply: PowerSupply | null;
-  addOns: SystemAddOnsBase;
-  editValues: boolean;
+
+  // Water
+  selectedWaterTankPartCode?: Codes;
+  selectedWaterTankPartDesc?: string;
+  waterTankCertification?: WaterTankCert;
+  requiredWaterTankCapacityGal?: number;
+
+  // Estimations
+  isEstimateEditingEnabled: boolean; // editValues
   estimates: PreEstimates;
-  _editEstimates?: Partial<Record<keyof PreEstimates, boolean>>;
-  systemPartCode?: string | null; // last known partcode (raw or formatted)
-  systemPartCodeLocked?: boolean | null; // true when checkbox is checked
+  estimateOverrides?: Partial<Record<keyof PreEstimates, boolean>>; // _editEstimates
+
+  // Addons
+  addOns: SystemAddOns;
+
+  // Partcode
+  systemPartCode?: string | null;
+  systemPartCodeLocked?: boolean | null;
 };
 
 export type SystemOptions = EngineeredOptions | PreEngineeredOptions;
 
-/* ─────────────────────────────────────────────────────────────
-   CONSTANTS / DEFAULTS
-   ───────────────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------- */
+/*                             CONSTANTS / DEFAULTS                           */
+/* -------------------------------------------------------------------------- */
 
 const DEFAULT_PROJECT: Project = {
   name: "Untitled Project",
@@ -297,32 +358,25 @@ const DEFAULT_PROJECT: Project = {
   email: "",
   currency: "USD",
   units: "imperial",
+  cylinderSupply: "FACTORY_FILL",
   elevation: "0FT/0KM",
   systems: [],
-  customerMultiplier: 1.0,
+  priceMultiplierEngineered: 0.35,
+  priceMultiplierPreEngineered: 0.3,
 };
 
 export function makeEngineeredOptions(): EngineeredOptions {
   return {
     kind: "engineered",
-    fillPressure: "3000 PSI/206.8 BAR",
-    refillAdapter: "CGA-580",
-    waterTank: "ASME/FM",
-    waterTankCertification: undefined,
-    powerSupply: "120",
     panelStyle: "ar",
-    bulkTubes: false,
-    rundownTimeMin: 0,
-    estimatedPipeVolume: 0,
-    addOns: {
-      placardsAndSignage: true,
-      doorCount: 1,
-      bulkRefillAdapter: false,
-      expProofTransducer: false,
-      waterFlexLine: false,
-      igsFlexibleHose48: false,
-    },
-    editValues: false,
+    refillAdapter: "CGA-580",
+    powerSupply: "120",
+    fillPressure: "3000 PSI/206.8 BAR",
+
+    usesBulkTubes: false,
+    bulkTubeCapacityScf: 11500,
+    isEstimateEditingEnabled: false,
+    estimateOverrides: {},
     estimates: {
       primaryReleaseAssemblies: 0,
       doubleStackedRackHose: 0,
@@ -331,50 +385,58 @@ export function makeEngineeredOptions(): EngineeredOptions {
       monitorPoints: 0,
       batteryBackups: 0,
     },
-    bulkTubeSize: null,
-    bulkTubeLabel: null,
-    bulkTubeNitrogenSCF: null,
+
+    requiredWaterTankCapacityGal: 0,
+    addOns: {
+      hasPlacardsAndSignage: true,
+      hasBulkRefillAdapter: false,
+      isExplosionProof: false,
+      hasWaterFlexLine: false,
+      hasIgsFlexibleHose48: false,
+      doorCount: 1,
+    },
+    // defaults
+    selectedWaterTankPartCode: undefined,
   };
 }
 
 export function makePreOptions(): PreEngineeredOptions {
   return {
     kind: "preengineered",
-    fillPressure: "3000 PSI/206.8 BAR",
     refillAdapter: "CGA-580",
-    waterTank: "ASME/FM",
-    waterTankCertification: undefined,
-
     powerSupply: "120",
-    addOns: {
-      placardsAndSignage: true,
-      doorCount: 1,
-      bulkRefillAdapter: false,
-      expProofTransducer: false,
+    fillPressure: "3000 PSI/206.8 BAR",
+
+    isEstimateEditingEnabled: false,
+    estimateOverrides: {},
+    estimates: {
+      releasePoints: 0,
+      monitorPoints: 0,
     },
-    editValues: false,
-    estimates: { releasePoints: 0, monitorPoints: 0 },
-    _editEstimates: {},
+
+    requiredWaterTankCapacityGal: 0,
+    addOns: {
+      hasPlacardsAndSignage: true,
+      hasBulkRefillAdapter: false,
+      isExplosionProof: false,
+      hasWaterFlexLine: false,
+      hasIgsFlexibleHose48: false,
+      doorCount: 1,
+    },
   };
 }
 
-/* ─────────────────────────────────────────────────────────────
-   ID / SMALL UTILS
-   ───────────────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------- */
+/*                               ID / SMALL UTILS                             */
+/* -------------------------------------------------------------------------- */
 
 function newId(prefix = "id") {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function containsInvalidCharacters(input: string) {
-  const bad = ["*", "?", ":", "\\", "/", "[", "]"];
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    for (let j = 0; j < bad.length; j++) {
-      if (ch === bad[j]) return true;
-    }
-  }
-  return false;
+  // disallow these characters anywhere in the input
+  return /[*?:\\\/\[\]]/.test(input);
 }
 
 function makeDefaultPreEnclosure(idx = 1): Enclosure {
@@ -384,16 +446,13 @@ function makeDefaultPreEnclosure(idx = 1): Enclosure {
   return {
     id: newId("enc"),
     name: `Enclosure ${idx}`,
-    volume: 1000,
-    tempF: 70,
-    method,
-    length: 10,
-    width: 10,
-    height: 10,
-    nozzleCode: nozzle,
-    emitterStyle: style,
-    customMinEmitters: null,
-    _editEmitters: false,
+    volumeFt3: 1000,
+    temperatureF: 70,
+    designMethod: method,
+    nozzleModel: nozzle,
+    nozzleOrientation: style,
+    customNozzleCount: null,
+    isNozzleCountOverridden: false,
   };
 }
 
@@ -402,8 +461,8 @@ export function makeDefaultPreZone(): Zone {
     id: newId("zone"),
     name: "Zone 1",
     enclosures: [makeDefaultPreEnclosure(1)],
-    customMinTotalCylinders: null,
-    _editCylinders: false,
+    customCylinderCount: null,
+    isCylinderCountOverridden: false,
   };
 }
 
@@ -415,13 +474,13 @@ export function makeDefaultEngEnclosure(idx = 1): Enclosure {
   return {
     id: newId("enc"),
     name: `Enclosure ${idx}`,
-    volume: 1000,
-    tempF: 70,
-    method,
-    nozzleCode: nozzle,
-    emitterStyle: style,
-    customMinEmitters: null,
-    _editEmitters: false,
+    volumeFt3: 1000,
+    temperatureF: 70,
+    designMethod: method,
+    nozzleModel: nozzle,
+    nozzleOrientation: style,
+    customNozzleCount: null,
+    isNozzleCountOverridden: false,
   };
 }
 
@@ -430,76 +489,76 @@ export function makeDefaultEngZone(idx = 0): Zone {
     id: newId("zone"),
     name: `Zone ${idx + 1}`,
     enclosures: [makeDefaultEngEnclosure(1)],
-    customMinTotalCylinders: null,
-    _editCylinders: false,
+    customCylinderCount: null,
+    isCylinderCountOverridden: false,
   };
 }
 
 /** Duplicate a zone for “copy last zone” UX. Clears calc outputs, keeps inputs. */
-export function duplicateZoneForAdd(base: Zone, nextIndexNumber: number): Zone {
+export function duplicateZone(base: Zone, nextIndexNumber: number): Zone {
   const newZoneId = newId("zone");
   const zoneName =
     base?.name && /\d+$/.test(base.name)
       ? base.name.replace(/\d+$/, String(nextIndexNumber + 1))
-      : `Zone ${nextIndexNumber + 1}`;
+      : `Zone ${nextIndexNumber + 1} `;
 
   const enclosures = (base.enclosures ?? []).map((e, j) => {
     const encName =
       e?.name && /\d+$/.test(e.name)
         ? e.name.replace(/\d+$/, String(j + 1))
-        : `Enclosure ${j + 1}`;
+        : `Enclosure ${j + 1} `;
 
     const {
-      minEmitters,
-      cylinderCount,
-      estDischarge,
-      estFinalO2,
-      qWater_gpm,
-      qWaterTotal_gpm,
-      estWater_gal,
+      requiredNozzleCount,
+      requiredCylinderCount,
+      estimatedDischargeDuration,
+      estimatedFinalOxygenPercent,
+      waterFlowRateGpm,
+      totalWaterFlowRateGpm,
+      estimatedWaterVolumeGal,
       ...rest
-    } = e as Enclosure;
+    } = e;
 
     const cleared: Enclosure = {
       ...rest,
       id: newId("enc"),
       name: encName,
-      minEmitters: undefined,
-      cylinderCount: undefined,
-      estDischarge: undefined,
-      estFinalO2: undefined,
-      flowCartridge: undefined, // ← add this line
-      qWater_gpm: undefined,
-      qWaterTotal_gpm: undefined,
-      estWater_gal: undefined,
+      requiredNozzleCount: undefined,
+      requiredCylinderCount: undefined,
+      estimatedDischargeDuration: undefined,
+      estimatedFinalOxygenPercent: undefined,
+      flowCartridge: undefined,
+      waterFlowRateGpm: undefined,
+      totalWaterFlowRateGpm: undefined,
+      estimatedWaterVolumeGal: undefined,
     };
 
     return cleared;
   });
 
   const {
-    minTotalCylinders,
-    q_n2_peak_scfm,
-    water_peak_gpm,
-    waterDischarge_gal,
-    waterTankMin_gal,
+    requiredCylinderCount,
+    peakNitrogenFlowRateScfm,
+    peakWaterFlowRateGpm,
+    waterDischargeVolumeGal,
+    minWaterTankCapacityGal,
     panelSizing,
     designLabel,
     ...restZone
-  } = base as any;
+  } = base as Zone;
 
   return {
     ...(restZone as Zone),
     id: newZoneId,
     name: zoneName,
     enclosures,
-    minTotalCylinders: undefined,
-    q_n2_peak_scfm: undefined,
-    water_peak_gpm: undefined,
-    waterDischarge_gal: undefined,
-    waterTankMin_gal: undefined,
+    requiredCylinderCount: undefined,
+    peakNitrogenFlowRateScfm: undefined,
+    peakWaterFlowRateGpm: undefined,
+    waterDischargeVolumeGal: undefined,
+    minWaterTankCapacityGal: undefined,
     panelSizing: undefined,
-    designLabel: restZone?.designLabel ?? undefined,
+    designLabel: designLabel ?? undefined,
   };
 }
 
@@ -510,7 +569,7 @@ function firstOrUndef<T>(arr: readonly T[]): T | undefined {
 function coerceStyle(
   method: MethodName,
   nozzle: NozzleCode,
-  candidate?: EmitterStyleKey
+  candidate?: EmitterStyleKey,
 ): EmitterStyleKey | undefined {
   const styles = getStylesFor(method, nozzle); // EmitterStyleKey[]
   if (candidate && styles.includes(candidate)) return candidate;
@@ -521,27 +580,27 @@ type HasName = { name?: string | null };
 /** Treat blank or "Zone 3" / "System 2" / "Enclosure 10" as default names. */
 function isBlankOrDefaultIndexedName(
   name: string | null | undefined,
-  base: string
+  base: string,
 ) {
   const n = (name ?? "").trim();
   if (!n) return true;
-  const re = new RegExp(`^${base}\\s+\\d+$`); // exact: "Zone 12"
+  const re = new RegExp(`^${base}\\s+\\d+$`);
   return re.test(n);
 }
 
 /** After deletions, rename only defaults ("Zone X") + blanks to match new index. */
 function reindexDefaultNames<T extends HasName>(items: T[], base: string): T[] {
   return items.map((it, i) => {
-    const nextDefault = `${base} ${i + 1}`;
+    const nextDefault = `${base} ${i + 1} `;
     if (isBlankOrDefaultIndexedName(it.name, base)) {
       return { ...it, name: nextDefault };
     }
     return it; // keep custom names
   });
 }
-/* ─────────────────────────────────────────────────────────────
-   VALIDATION (CALCULATION-FREE)
-   ───────────────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------- */
+/*                               VALIDATION                                   */
+/* -------------------------------------------------------------------------- */
 
 function validateProject(project: Project): StatusMessage[] {
   const msgs: StatusMessage[] = [];
@@ -597,13 +656,13 @@ function validateProject(project: Project): StatusMessage[] {
     }
 
     // FM methods require FM-capable tank
-    const tank = sys.options.waterTank;
+    const tank = sys.options.waterTankCertification;
     const hasFMMethod = sys.zones.some((z) =>
       z.enclosures.some(
         (e) =>
-          e.method === "FM Data Centers" ||
-          e.method === "FM Machine Spaces/Turbines"
-      )
+          e.designMethod === "FM Data Centers" ||
+          e.designMethod === "FM Machine Spaces/Turbines",
+      ),
     );
     if (hasFMMethod && tank === "CE") {
       msgs.push({
@@ -612,7 +671,7 @@ function validateProject(project: Project): StatusMessage[] {
       });
     }
     if (sys.options.kind === "engineered") {
-      if (sys.options.bulkTubes) {
+      if (sys.options.usesBulkTubes) {
         msgs.push({
           ...statusFromCode("SYS.BULK_TUBES_EXCLUDED", { systemId: sys.id }),
           id: id(),
@@ -621,27 +680,10 @@ function validateProject(project: Project): StatusMessage[] {
     }
     // Detect whether this system contains any FM Machine Spaces/Turbines enclosure
     const hasFMMachine = sys.zones.some((z) =>
-      z.enclosures.some((e) => e.method === "FM Machine Spaces/Turbines")
+      z.enclosures.some((e) => e.designMethod === "FM Machine Spaces/Turbines"),
     );
 
     // Rundown time warning: value entered but no FM Machine Spaces/Turbines enclosures
-    if (sys.options.kind === "engineered") {
-      const rt = Number((sys.options as EngineeredOptions).rundownTimeMin ?? 0);
-      const hasRt = Number.isFinite(rt) && rt > 0;
-
-      if (hasRt && !hasFMMachine) {
-        msgs.push({
-          id: id(),
-          ...statusFromCode(
-            "SYS.RUNDOWN_TIME_UNUSED",
-            { systemId: sys.id },
-            {}
-          ),
-          field: "rundownTimeMin",
-          systemId: sys.id, // redundant but explicit is fine
-        });
-      }
-    }
 
     // Zones + enclosures
     for (const zone of sys.zones) {
@@ -677,6 +719,24 @@ function validateProject(project: Project): StatusMessage[] {
         });
         continue;
       }
+      if (sys.options.kind === "engineered") {
+        const rt = zone.rundownTimeMin ?? 0;
+        const hasRt = Number.isFinite(rt) && rt > 0;
+
+        if (hasRt && !hasFMMachine) {
+          msgs.push({
+            id: id(),
+            ...statusFromCode(
+              "ZONE.RUNDOWN_TIME_UNUSED",
+              { systemId: sys.id },
+              {},
+            ),
+            field: "rundownTimeMin",
+            systemId: sys.id, // redundant but explicit is fine
+            zoneId: zone.id,
+          });
+        }
+      }
 
       for (const enc of zone.enclosures) {
         if (!enc.name || !enc.name.trim()) {
@@ -701,7 +761,7 @@ function validateProject(project: Project): StatusMessage[] {
 
         const tMin = project.units === "imperial" ? 40 : 4.4;
         const tMax = project.units === "imperial" ? 130 : 54.4;
-        const tRaw = enc.tempF;
+        const tRaw = enc.temperatureF;
         if (tRaw == null || Number.isNaN(tRaw)) {
           msgs.push({
             id: id(),
@@ -709,7 +769,7 @@ function validateProject(project: Project): StatusMessage[] {
               systemId: sys.id,
               zoneId: zone.id,
               enclosureId: enc.id,
-              field: "tempF",
+              field: "temperatureF",
             }),
           });
         } else {
@@ -721,48 +781,30 @@ function validateProject(project: Project): StatusMessage[] {
                 systemId: sys.id,
                 zoneId: zone.id,
                 enclosureId: enc.id,
-                field: "tempF",
+                field: "temperatureF",
               }),
             });
           }
         }
-        if (sys.type === "engineered") {
-          if (!enc.volume || enc.volume <= 0) {
-            msgs.push({
-              id: id(),
-              ...statusFromCode("ENC.VOLUME_EMPTY", {
-                systemId: sys.id,
-                zoneId: zone.id,
-                enclosureId: enc.id,
-                field: "volume",
-              }),
-            });
-          }
-        } else {
-          if (
-            (enc.length ?? 0) <= 0 ||
-            (enc.width ?? 0) <= 0 ||
-            (enc.height ?? 0) <= 0
-          ) {
-            msgs.push({
-              id: id(),
-              ...statusFromCode("ENC.VOLUME_EMPTY", {
-                systemId: sys.id,
-                zoneId: zone.id,
-                enclosureId: enc.id,
-                field: "volume",
-              }),
-            });
-          }
+        if (!enc.volumeFt3 || enc.volumeFt3 <= 0) {
+          msgs.push({
+            id: id(),
+            ...statusFromCode("ENC.VOLUME_EMPTY", {
+              systemId: sys.id,
+              zoneId: zone.id,
+              enclosureId: enc.id,
+              field: "volumeFt3",
+            }),
+          });
         }
 
         // FM-specific volume caps
-        if (enc.method === "FM Data Centers") {
+        if (enc.designMethod === "FM Data Centers") {
           const maxFt3 = 31350;
           const maxM3 = 2912.5;
           const exceeds =
-            (project.units === "imperial" && (enc.volume || 0) > maxFt3) ||
-            (project.units === "metric" && (enc.volume || 0) > maxM3);
+            (project.units === "imperial" && (enc.volumeFt3 || 0) > maxFt3) ||
+            (project.units === "metric" && (enc.volumeFt3 || 0) > maxM3);
           if (exceeds) {
             msgs.push({
               id: id(),
@@ -775,12 +817,12 @@ function validateProject(project: Project): StatusMessage[] {
           }
         }
 
-        if (enc.method === "FM Machine Spaces/Turbines") {
+        if (enc.designMethod === "FM Machine Spaces/Turbines") {
           const maxFt3 = 127525;
           const maxM3 = 3611.1;
           const exceeds =
-            (project.units === "imperial" && (enc.volume || 0) > maxFt3) ||
-            (project.units === "metric" && (enc.volume || 0) > maxM3);
+            (project.units === "imperial" && (enc.volumeFt3 || 0) > maxFt3) ||
+            (project.units === "metric" && (enc.volumeFt3 || 0) > maxM3);
           if (exceeds) {
             msgs.push({
               id: id(),
@@ -810,7 +852,7 @@ function validateProject(project: Project): StatusMessage[] {
           ...statusFromCode(
             "ZONE.DUPLICATE_NAME",
             { systemId: sys.id, zoneId: z.id },
-            { name: z.name }
+            { name: z.name },
           ),
         });
       }
@@ -831,7 +873,7 @@ function validateProject(project: Project): StatusMessage[] {
         ...statusFromCode(
           "SYS.DUPLICATE_NAME",
           { systemId: s.id },
-          { name: s.name }
+          { name: s.name },
         ),
       });
     }
@@ -842,7 +884,7 @@ function validateProject(project: Project): StatusMessage[] {
 
 export function checkUniqueEnclosureNamesInZone(
   zone: Zone,
-  systemId: string
+  systemId: string,
 ): StatusMessage[] {
   const seen: Record<string, number> = {};
   for (const enc of zone.enclosures) {
@@ -861,7 +903,7 @@ export function checkUniqueEnclosureNamesInZone(
         ...statusFromCode(
           "ENC.DUPLICATE_NAME",
           { systemId, zoneId: zone.id, enclosureId: enc.id },
-          { name: enc.name }
+          { name: enc.name },
         ),
       });
     }
@@ -872,14 +914,15 @@ export function checkUniqueEnclosureNamesInZone(
 /** A zone can mix A/C and B only; all other mixes invalid. */
 export function checkZoneDesignMethodCompatibility(
   zone: Zone,
-  systemId: string
+  systemId: string,
 ): StatusMessage[] {
   if (!zone.enclosures || zone.enclosures.length <= 1) return [];
-  const methods = new Set<Enclosure["method"]>();
-  for (const enc of zone.enclosures) if (enc.method) methods.add(enc.method);
+  const methods = new Set<Enclosure["designMethod"]>();
+  for (const enc of zone.enclosures)
+    if (enc.designMethod) methods.add(enc.designMethod);
   if (methods.size <= 1) return [];
 
-  const ALLOWED_MIX = new Set<Enclosure["method"]>([
+  const ALLOWED_MIX = new Set<Enclosure["designMethod"]>([
     "NFPA 770 Class A/C",
     "NFPA 770 Class B",
   ]);
@@ -892,19 +935,19 @@ export function checkZoneDesignMethodCompatibility(
       ...statusFromCode(
         "ZONE.DM_MISMATCH",
         { systemId, zoneId: zone.id },
-        { methods: Array.from(methods) }
+        { methods: Array.from(methods) },
       ),
     },
   ];
 }
 
-/* ─────────────────────────────────────────────────────────────
-   CONTEXT API
-   ───────────────────────────────────────────────────────────── */
-
-// ─────────────────────────────────────────────────────────────
-// CONTEXT API (type Model) — add hasCalculated to the context value
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                                CONTEXT API                                 */
+/* -------------------------------------------------------------------------- */
+/**
+ * The main application state model.
+ * Includes project data, status messages, and actions to mutate state or run calculations.
+ */
 type Model = {
   project: Project;
 
@@ -920,7 +963,7 @@ type Model = {
   updateSystem: (systemId: string, patch: Partial<System>) => void;
   updateSystemOptions: (
     systemId: string,
-    patch: Partial<SystemOptions>
+    patch: Partial<SystemOptions>,
   ) => void;
   changeSystemType: (systemId: string, type: SystemType) => void;
   updateZone: (systemId: string, zoneId: string, patch: Partial<Zone>) => void;
@@ -928,7 +971,7 @@ type Model = {
     systemId: string,
     zoneId: string,
     enclosureId: string,
-    patch: Partial<Enclosure>
+    patch: Partial<Enclosure>,
   ) => void;
 
   // Remove
@@ -937,14 +980,13 @@ type Model = {
   removeEnclosure: (
     systemId: string,
     zoneId: string,
-    enclosureId: string
+    enclosureId: string,
   ) => void;
 
   // Actions
   runCalculateEngineered: () => void;
   runCalculatePreEngineered: () => void;
   runCalculateAll: () => void;
-  applyPreEngSystemPartcode: (systemId: string) => void;
 
   // Status
   status: StatusMessage[];
@@ -969,6 +1011,8 @@ type Model = {
   generateEngineeredBOM: () => Promise<void>;
   priceIndexReady: boolean;
   projectListPrice: number | null;
+  engListPrice: number | null;
+  preListPrice: number | null;
 
   // NEW
   clearProject: () => void;
@@ -982,9 +1026,9 @@ type Model = {
 
 const AppModelContext = createContext<Model | null>(null);
 
-/* ─────────────────────────────────────────────────────────────
-   PROVIDER
-   ───────────────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------- */
+/*                                  PROVIDER                                  */
+/* -------------------------------------------------------------------------- */
 
 export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -997,6 +1041,10 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   const [priceIndexReady, setPriceIndexReady] = useState(false);
   const [projectListPrice, setProjectListPrice] = useState<number | null>(null);
 
+  // NEW: per-type list price exposures for UI
+  const [engListPrice, setEngListPrice] = useState<number | null>(null);
+  const [preListPrice, setPreListPrice] = useState<number | null>(null);
+
   // ✅ Calculation gating
   const [hasCalculated, setHasCalculated] = useState(false);
   const [autosaveEnabled, setAutosaveEnabled] = useState(true);
@@ -1007,6 +1055,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       if (snap?.project) {
         setStatus([]);
         setProjectListPrice(null);
+        setEngListPrice(null);
+        setPreListPrice(null);
         setHasCalculated(false);
         setProject(snap.project as Project);
       }
@@ -1019,6 +1069,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   const markDirty = () => {
     setHasCalculated(false);
     setProjectListPrice(null);
+    setEngListPrice(null); // NEW
+    setPreListPrice(null); // NEW
   };
 
   // ✅ Helper wrappers to reduce repetition
@@ -1061,7 +1113,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
           ? m.enclosureId === scope.enclosureId
           : true;
         return !(matchSystem && matchZone && matchEnc);
-      })
+      }),
     );
   };
 
@@ -1081,6 +1133,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setStatus([]);
     setProjectListPrice(null);
+    setEngListPrice(null);
+    setPreListPrice(null);
     setHasCalculated(false);
 
     setProject(DEFAULT_PROJECT);
@@ -1149,13 +1203,13 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       const enc: Enclosure = {
         id: newId("enc"),
         name: `Enclosure ${zone.enclosures.length + 1}`,
-        volume: 1000,
-        tempF: 70,
-        method: m,
-        nozzleCode: nz,
-        emitterStyle: st,
-        customMinEmitters: null,
-        _editEmitters: false,
+        volumeFt3: 1000,
+        temperatureF: 70,
+        designMethod: m,
+        nozzleModel: nz,
+        nozzleOrientation: st,
+        customNozzleCount: null,
+        isNozzleCountOverridden: false,
       };
 
       const zones = [...sys.zones];
@@ -1179,7 +1233,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateSystemOptions: Model["updateSystemOptions"] = (
     systemId,
-    patch
+    patch,
   ) => {
     mutateProject((p) => {
       const sidx = p.systems.findIndex((s) => s.id === systemId);
@@ -1247,7 +1301,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     systemId,
     zoneId,
     eid,
-    patch
+    patch,
   ) => {
     mutateProject((p) => {
       const sidx = p.systems.findIndex((s) => s.id === systemId);
@@ -1255,7 +1309,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       const zidx = p.systems[sidx].zones.findIndex((z) => z.id === zoneId);
       if (zidx < 0) return p;
       const eidx = p.systems[sidx].zones[zidx].enclosures.findIndex(
-        (e) => e.id === eid
+        (e) => e.id === eid,
       );
       if (eidx < 0) return p;
 
@@ -1264,29 +1318,34 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       let next: Enclosure = { ...old, ...patch };
 
       // 1) Method changed → reset nozzle & style to valid defaults
-      if (patch.method && patch.method !== old.method) {
-        const m = next.method as MethodName;
+      if (patch.designMethod && patch.designMethod !== old.designMethod) {
+        const m = next.designMethod as MethodName;
         const nz: NozzleCode = pickDefaultNozzle(m);
-        next.nozzleCode = nz;
-        next.emitterStyle = coerceStyle(m, nz);
+        next.nozzleModel = nz;
+        next.nozzleOrientation = coerceStyle(m, nz);
       }
 
       // 2) Nozzle changed → ensure style is valid for (method, nozzle)
-      if (patch.nozzleCode && patch.nozzleCode !== old.nozzleCode) {
-        const m = (next.method as MethodName) ?? (old.method as MethodName);
-        const nz = next.nozzleCode as NozzleCode;
-        next.emitterStyle = coerceStyle(m, nz, next.emitterStyle);
+      if (patch.nozzleModel && patch.nozzleModel !== old.nozzleModel) {
+        const m =
+          (next.designMethod as MethodName) ?? (old.designMethod as MethodName);
+        const nz = next.nozzleModel as NozzleCode;
+        next.nozzleOrientation = coerceStyle(m, nz, next.nozzleOrientation);
       }
 
       // 3) Style changed → ensure it belongs to current (method, nozzle)
-      if (patch.emitterStyle && patch.emitterStyle !== old.emitterStyle) {
-        const m = (next.method as MethodName) ?? (old.method as MethodName);
+      if (
+        patch.nozzleOrientation &&
+        patch.nozzleOrientation !== old.nozzleOrientation
+      ) {
+        const m =
+          (next.designMethod as MethodName) ?? (old.designMethod as MethodName);
         const nz =
-          (next.nozzleCode as NozzleCode) ?? (old.nozzleCode as NozzleCode);
-        next.emitterStyle = coerceStyle(
+          (next.nozzleModel as NozzleCode) ?? (old.nozzleModel as NozzleCode);
+        next.nozzleOrientation = coerceStyle(
           m,
           nz,
-          patch.emitterStyle as EmitterStyleKey
+          patch.nozzleOrientation as EmitterStyleKey,
         );
       }
 
@@ -1356,6 +1415,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   /* ---------- Pricing / BOM helpers ---------- */
+
   async function ensurePriceIndex(): Promise<PriceIndex> {
     if (priceIndex) return priceIndex;
     const idx = await fetchPriceIndex();
@@ -1363,30 +1423,73 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     setPriceIndexReady(true);
     return idx;
   }
-
-  async function computeProjectListPrice(p: Project): Promise<number> {
+  type PriceTotals = { eng: number; pre: number; total: number };
+  async function computeProjectListPriceByType(p: Project): Promise<{
+    engListPrice: number | null;
+    preListPrice: number | null;
+    totalListPrice: number;
+  }> {
     const idx = await ensurePriceIndex();
-    const bySystem: EngineeredBomBySystem = collectBOM(p);
-    let total = 0;
+    const bySystem = collectBOM(p); // EngineeredBomBySystem
 
-    Object.values(bySystem).forEach(({ bom }) => {
-      bom.forEach((line) => {
+    let engTotal = 0;
+    let preTotal = 0;
+    let anyEng = false;
+    let anyPre = false;
+
+    // bySystem keys are system IDs (collectBOM merges engineered + pre)
+    for (const [sysId, block] of Object.entries(bySystem)) {
+      const sys = p.systems.find((s) => s.id === sysId);
+      const type: SystemType = sys?.type ?? "engineered"; // default safe-guard
+
+      // block.bom is a Map / BomMap
+      const bom = (block as any).bom as Map<any, any>;
+      let sysTotal = 0;
+      for (const line of bom.values()) {
         const entry =
           idx[line.partcode] || (line.alt ? idx[line.alt] : undefined);
         const unit = entry?.listPrice ?? 0;
-        total += unit * (line.qty || 0);
-      });
-    });
+        sysTotal += unit * (line.qty || 0);
+      }
 
-    return total;
+      if (type === "preengineered") {
+        anyPre = true;
+        preTotal += sysTotal;
+      } else {
+        anyEng = true;
+        engTotal += sysTotal;
+      }
+    }
+
+    const engVal = anyEng ? engTotal : null;
+    const preVal = anyPre ? preTotal : null;
+    return {
+      engListPrice: engVal,
+      preListPrice: preVal,
+      totalListPrice: engTotal + preTotal,
+    };
   }
 
   async function recomputeProjectListPrice(p: Project) {
     try {
-      const total = await computeProjectListPrice(p);
-      setProjectListPrice(Number.isFinite(total) ? total : null);
+      const {
+        engListPrice: engVal,
+        preListPrice: preVal,
+        totalListPrice,
+      } = await computeProjectListPriceByType(p);
+      setEngListPrice(
+        Number.isFinite(engVal as number) ? (engVal as number) : null,
+      );
+      setPreListPrice(
+        Number.isFinite(preVal as number) ? (preVal as number) : null,
+      );
+      setProjectListPrice(
+        Number.isFinite(totalListPrice) ? totalListPrice : null,
+      );
     } catch {
       setProjectListPrice(null);
+      setEngListPrice(null);
+      setPreListPrice(null);
     }
   }
 
@@ -1424,8 +1527,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const { project: nextProject, messages: runtime = [] } =
       calculatePreEngineered(locked.project);
 
-    // 3) Update project without marking dirty (calc results are not "user edits")
-    mutateProjectNoDirty(() => nextProject);
+    const nextWithCodes = syncUnlockedPreEngPartcodes(nextProject);
+    mutateProjectNoDirty(() => nextWithCodes);
 
     // 4) Merge messages
     const msgs = [
@@ -1437,7 +1540,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 5) Blocked?
     const blocked = msgs.some((m) => m.severity === "error");
-    if (!blocked) void recomputeProjectListPrice(nextProject);
+    if (!blocked) void recomputeProjectListPrice(nextWithCodes);
     else setProjectListPrice(null);
 
     // ✅ Only "calculated" if not blocked
@@ -1457,9 +1560,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
     const eng = calculateEngineered(applied.project);
     const engSynced = syncPointsFromBOM(eng.project);
     const pree = calculatePreEngineered(engSynced);
-
-    // 3) Update final project without marking dirty
-    mutateProjectNoDirty(() => pree.project);
+    const finalProj = syncUnlockedPreEngPartcodes(pree.project);
+    mutateProjectNoDirty(() => finalProj);
 
     // 4) Merge messages
     const msgs = [
@@ -1472,117 +1574,11 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // 5) Blocked?
     const blocked = msgs.some((m) => m.severity === "error");
-    if (!blocked) void recomputeProjectListPrice(pree.project);
+    if (!blocked) void recomputeProjectListPrice(finalProj);
     else setProjectListPrice(null);
 
     // ✅ Only "calculated" if not blocked
     setHasCalculated(!blocked);
-  };
-
-  // ✅ Partcode apply is an input mutation → markDirty()
-  const applyPreEngSystemPartcode = (systemId: string) => {
-    const sys = project.systems.find((s) => s.id === systemId);
-    if (!sys || sys.type !== "preengineered") return;
-
-    clearStatus({ systemId });
-
-    const opts = sys.options as PreEngineeredOptions;
-    const rawInput = String(opts.systemPartCode ?? "").trim();
-
-    if (!rawInput) {
-      addStatus(
-        statusFromCode(
-          "SYS.INVALID_PARTCODE",
-          { systemId },
-          {
-            message:
-              "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
-          }
-        )
-      );
-      return;
-    }
-
-    const decoded = decodeSystemPartcodeToConfig(rawInput);
-
-    if (decoded.ok == false) {
-      const { reason, digit } = decoded;
-      let message = "Invalid system partcode.";
-      if (reason === "empty") {
-        message =
-          "System partcode is empty. Enter a valid 15-character pre-engineered system code.";
-      } else if (reason === "length") {
-        message = `Invalid system partcode length. Expected 15 digits but received ${digit}.`;
-      } else if (reason === "digit") {
-        message = `Invalid system partcode at digit [${digit}]. Check the digit value(s), then try again.`;
-      } else if (reason === "conflict") {
-        message = `Invalid system partcode due to conflicting values at digit(s) [${digit}].`;
-      }
-
-      addStatus(
-        statusFromCode("SYS.INVALID_PARTCODE", { systemId }, { message })
-      );
-      return;
-    }
-
-    const { prePatch, zonePatch, enclosurePatch, formatted } = decoded.decoded;
-
-    mutateProject((prev) => {
-      const sidx = prev.systems.findIndex((s) => s.id === systemId);
-      if (sidx < 0) return prev;
-
-      const oldSys = prev.systems[sidx];
-      if (oldSys.type !== "preengineered") return prev;
-
-      const oldZone = oldSys.zones[0] ?? makeDefaultPreZone();
-      const oldEnc0 = oldZone.enclosures?.[0] ?? makeDefaultPreEnclosure(1);
-
-      let nextEnc0: Enclosure = { ...oldEnc0, ...enclosurePatch };
-
-      if (!nextEnc0.nozzleCode) {
-        const m = nextEnc0.method as MethodName;
-        const nz = pickDefaultNozzle(m, { systemType: "preengineered" } as any);
-        nextEnc0.nozzleCode = nz;
-      }
-      if (nextEnc0.nozzleCode) {
-        nextEnc0.emitterStyle = coerceStyle(
-          nextEnc0.method as MethodName,
-          nextEnc0.nozzleCode as NozzleCode,
-          nextEnc0.emitterStyle
-        );
-      }
-
-      const newZone0: Zone = {
-        ...oldZone,
-        ...zonePatch,
-        enclosures: [nextEnc0],
-      };
-
-      const oldOpts = oldSys.options as PreEngineeredOptions;
-      const mergedAddOns = {
-        ...(oldOpts.addOns ?? {}),
-        ...((prePatch as any).addOns ?? {}),
-      };
-
-      const newOptions: PreEngineeredOptions = {
-        ...oldOpts,
-        ...prePatch,
-        addOns: mergedAddOns,
-        systemPartCode: formatted,
-        systemPartCodeLocked: true,
-        kind: "preengineered",
-      };
-
-      const systems = [...prev.systems];
-      systems[sidx] = { ...oldSys, zones: [newZone0], options: newOptions };
-      return { ...prev, systems };
-    });
-
-    addStatus({
-      severity: "info",
-      systemId,
-      text: `System configuration updated from partcode ${formatted}`,
-    });
   };
 
   function applyAllLockedPreEngPartcodes(p: Project): {
@@ -1591,110 +1587,133 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   } {
     const messages: StatusInput[] = [];
 
-    const normalizeLockedSystem = (sys: System): System => {
-      if (sys.type !== "preengineered") return sys;
+    const systems = p.systems.map((sys) => {
+      const r = applyLockedPreEngPartcodeToSystem(sys);
+      messages.push(...r.messages);
+      return r.sys;
+    });
 
-      const opts = sys.options as PreEngineeredOptions;
-      if (!opts.systemPartCodeLocked) return sys;
-
-      const rawInput = String(opts.systemPartCode ?? "").trim();
-
-      const pushInvalid = (message: string) => {
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            { message }
-          )
-        );
-      };
-
-      if (!rawInput) {
-        pushInvalid(
-          "System partcode is empty. Enter a valid 15-character pre-engineered system code."
-        );
-        return sys;
-      }
-
-      const decoded = decodeSystemPartcodeToConfig(rawInput);
-
-      if (decoded.ok === false) {
-        const { reason, digit } = decoded;
-        let message = "Invalid system partcode.";
-
-        if (reason === "empty") {
-          message =
-            "System partcode is empty. Enter a valid 15-character pre-engineered system code.";
-        } else if (reason === "length") {
-          message = `Invalid system partcode length. Expected 15 digits but received ${digit}.`;
-        } else if (reason === "digit") {
-          message = `Invalid system partcode at digit [${digit}]. Check the digit value(s), then try again.`;
-        } else if (reason === "conflict") {
-          message = `Invalid system partcode due to conflicting values at digit(s) [${digit}].`;
-        }
-
-        pushInvalid(message);
-        return sys;
-      }
-
-      const { prePatch, zonePatch, enclosurePatch, formatted } =
-        decoded.decoded;
-
-      // Ensure zone + enclosure exist (pre-eng assumes 1)
-      const oldZone = sys.zones[0] ?? makeDefaultPreZone();
-      const oldEnc0 = oldZone.enclosures?.[0] ?? makeDefaultPreEnclosure(1);
-
-      // Apply enclosure patch
-      let nextEnc0: Enclosure = { ...oldEnc0, ...enclosurePatch };
-
-      // Safety: enforce valid nozzle/style even if mapping is partial
-      if (!nextEnc0.nozzleCode) {
-        const m = nextEnc0.method as MethodName;
-        const nz = pickDefaultNozzle(m, { systemType: "preengineered" } as any);
-        nextEnc0.nozzleCode = nz;
-      }
-      if (nextEnc0.nozzleCode) {
-        nextEnc0.emitterStyle = coerceStyle(
-          nextEnc0.method as MethodName,
-          nextEnc0.nozzleCode as NozzleCode,
-          nextEnc0.emitterStyle
-        );
-      }
-
-      // Apply zone patch, preserve other zone props
-      const newZone0: Zone = {
-        ...oldZone,
-        ...zonePatch,
-        enclosures: [nextEnc0],
-      };
-
-      // Merge addOns (patch addOns should override existing)
-      const oldOpts = sys.options as PreEngineeredOptions;
-      const mergedAddOns = {
-        ...(oldOpts.addOns ?? {}),
-        ...((prePatch as any).addOns ?? {}),
-      };
-
-      const newOptions: PreEngineeredOptions = {
-        ...oldOpts,
-        ...prePatch,
-        addOns: mergedAddOns,
-        systemPartCode: formatted, // normalize display
-        systemPartCodeLocked: true,
-        kind: "preengineered",
-      };
-
-      return {
-        ...sys,
-        zones: [newZone0],
-        options: newOptions,
-      };
-    };
-
-    const systems = p.systems.map(normalizeLockedSystem);
     return { project: { ...p, systems }, messages };
   }
   const hasErrors = status.some((m) => m.severity === "error");
+  function applyLockedPreEngPartcodeToSystem(sys: System): {
+    sys: System;
+    messages: StatusInput[];
+  } {
+    const messages: StatusInput[] = [];
+    if (sys.options.kind !== "preengineered") return { sys, messages };
+    const opts = sys.options; // PreEngineeredOptions
+    if (!opts.systemPartCodeLocked) return { sys, messages };
+
+    const rawInput = String(opts.systemPartCode ?? "").trim();
+
+    const pushInvalid = (message: string) => {
+      messages.push(
+        statusFromCode(
+          "SYS.INVALID_PARTCODE",
+          { systemId: sys.id },
+          { message },
+        ),
+      );
+    };
+
+    if (!rawInput) {
+      pushInvalid(
+        "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
+      );
+      return { sys, messages };
+    }
+
+    const decoded = decodeSystemPartcodeToConfig(rawInput);
+    if (decoded.ok === false) {
+      const { reason, digit } = decoded;
+      let message = "Invalid system partcode.";
+
+      if (reason === "empty") {
+        message =
+          "System partcode is empty. Enter a valid 15-character pre-engineered system code.";
+      } else if (reason === "length") {
+        message = `Invalid system partcode length.Expected 15 digits but received ${digit}.`;
+      } else if (reason === "digit") {
+        message = `Invalid system partcode at digit[${digit}]. Check the digit value(s), then try again.`;
+      } else if (reason === "conflict") {
+        message = `Invalid system partcode due to conflicting values at digit(s)[${digit}].`;
+      }
+
+      pushInvalid(message);
+      return { sys, messages };
+    }
+
+    const { prePatch, zonePatch, enclosurePatch, formatted } = decoded.decoded;
+
+    const oldZone = sys.zones[0] ?? makeDefaultPreZone();
+    const oldEnc0 = oldZone.enclosures?.[0] ?? makeDefaultPreEnclosure(1);
+
+    let nextEnc0: Enclosure = { ...oldEnc0, ...enclosurePatch };
+
+    // Safety: ensure nozzle/style are valid
+    if (!nextEnc0.nozzleModel) {
+      const m = nextEnc0.designMethod as MethodName;
+      const nz = pickDefaultNozzle(m, { systemType: "preengineered" } as any);
+      nextEnc0.nozzleModel = nz;
+    }
+    if (nextEnc0.nozzleModel) {
+      nextEnc0.nozzleOrientation = coerceStyle(
+        nextEnc0.designMethod as MethodName,
+        nextEnc0.nozzleModel as NozzleCode,
+        nextEnc0.nozzleOrientation,
+      );
+    }
+
+    const newZone0: Zone = {
+      ...oldZone,
+      ...zonePatch,
+      enclosures: [nextEnc0],
+    };
+
+    const oldOpts = sys.options as PreEngineeredOptions;
+    const mergedAddOns = {
+      ...(oldOpts.addOns ?? {}),
+      ...((prePatch as any).addOns ?? {}),
+    };
+
+    const nextOptions: PreEngineeredOptions = {
+      ...opts,
+      ...prePatch,
+      addOns: { ...(opts.addOns ?? {}), ...((prePatch as any).addOns ?? {}) },
+      systemPartCode: formatted,
+      systemPartCodeLocked: true,
+      kind: "preengineered",
+    };
+
+    return {
+      sys: { ...sys, zones: [newZone0], options: nextOptions },
+      messages,
+    };
+  }
+
+  function syncUnlockedPreEngPartcodes(p: Project): Project {
+    const systems: System[] = p.systems.map((sys) => {
+      if (sys.options.kind !== "preengineered") return sys;
+
+      const opts = sys.options; // now PreEngineeredOptions
+      if (opts.systemPartCodeLocked) return sys;
+
+      const built = buildPreEngSystemPartcodeFromConfig(p, sys);
+      if (!built) return sys;
+
+      const nextOpts: PreEngineeredOptions = {
+        ...opts,
+        systemPartCode: built.formatted,
+        systemPartCodeLocked: false,
+        kind: "preengineered",
+      };
+
+      return { ...sys, options: nextOpts };
+    });
+
+    return { ...p, systems };
+  }
 
   /* ---------- Import/Export ---------- */
   const exportProjectToFile: Model["exportProjectToFile"] = () => {
@@ -1723,7 +1742,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const importProjectFromFile: Model["importProjectFromFile"] = async (
-    file
+    file,
   ) => {
     const text = await readFileAsText(file);
     try {
@@ -1737,11 +1756,12 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       setProjectListPrice(null);
       setHasCalculated(false);
 
-      setProject(snap.project as Project);
+      const migrated = migrateLegacyProject(snap.project);
+      setProject(migrated);
 
       addStatus({
         severity: "info",
-        text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
+        text: `Imported project: ${(snap.project as any).name || "Untitled"} `,
       });
     } catch (err: any) {
       addStatus({
@@ -1768,11 +1788,14 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
           setProjectListPrice(null);
           setHasCalculated(false);
 
-          setProject(snap.project as Project);
+          setHasCalculated(false);
+
+          const migrated = migrateLegacyProject(snap.project);
+          setProject(migrated);
 
           addStatus({
             severity: "info",
-            text: `Imported project: ${(snap.project as any).name || "Untitled"}`,
+            text: `Imported project: ${(snap.project as any).name || "Untitled"} `,
           });
           return;
         } catch (err: any) {
@@ -1818,7 +1841,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         setStatus([]);
         setProjectListPrice(null);
         setHasCalculated(false);
-        setProject(snap.project as Project);
+        const migrated = migrateLegacyProject(snap.project);
+        setProject(migrated);
       }
     } catch {
       /* ignore bad autosave */
@@ -1847,12 +1871,27 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
 
   /* ---------- BOM Excel generation ---------- */
   const projectNetPrice = useMemo(() => {
-    const mult = Math.min(
+    if (engListPrice == null && preListPrice == null) return null;
+
+    const engMult = Math.min(
       1,
-      Math.max(0, Number(project.customerMultiplier ?? 1))
+      Math.max(0, Number(project.priceMultiplierEngineered ?? 0.35)),
     );
-    return projectListPrice == null ? null : projectListPrice * mult;
-  }, [projectListPrice, project.customerMultiplier]);
+    const preMult = Math.min(
+      1,
+      Math.max(0, Number(project.priceMultiplierPreEngineered ?? 0.3)),
+    );
+
+    const engNet = engListPrice == null ? 0 : engListPrice * engMult;
+    const preNet = preListPrice == null ? 0 : preListPrice * preMult;
+
+    return engNet + preNet;
+  }, [
+    engListPrice,
+    preListPrice,
+    project.priceMultiplierEngineered,
+    project.priceMultiplierPreEngineered,
+  ]);
 
   async function generateEngineeredBOM() {
     // Guard: must have a successful calculation AND no blocking errors
@@ -1864,9 +1903,13 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       priceIndex: idx,
       options: {
         currency: project.currency,
-        multiplier: Math.min(
+        engineeredMultiplier: Math.min(
           1,
-          Math.max(0, Number(project.customerMultiplier ?? 1))
+          Math.max(0, Number(project.priceMultiplierEngineered ?? 0.35)),
+        ),
+        preengineeredMultiplier: Math.min(
+          1,
+          Math.max(0, Number(project.priceMultiplierPreEngineered ?? 0.3)),
         ),
       },
     });
@@ -1883,7 +1926,7 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
         new Blob([bytes], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }),
-        `${fnameSafe}.xlsx`
+        `${fnameSafe}.xlsx`,
       );
     }
   }
@@ -1911,7 +1954,6 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       runCalculateEngineered,
       runCalculatePreEngineered,
       runCalculateAll,
-      applyPreEngSystemPartcode,
 
       status,
       addStatus,
@@ -1929,6 +1971,8 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       priceIndexReady,
       projectListPrice,
       projectNetPrice,
+      engListPrice,
+      preListPrice,
 
       clearProject,
 
@@ -1943,7 +1987,9 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       priceIndexReady,
       projectListPrice,
       projectNetPrice,
-    ]
+      engListPrice, // <- add this
+      preListPrice, // <- add this
+    ],
   );
 
   return (
@@ -1954,9 +2000,9 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-/* ─────────────────────────────────────────────────────────────
-   HOOK
-   ───────────────────────────────────────────────────────────── */
+/* -------------------------------------------------------------------------- */
+/*                                    HOOK                                    */
+/* -------------------------------------------------------------------------- */
 
 export function useAppModel() {
   const ctx = useContext(AppModelContext);

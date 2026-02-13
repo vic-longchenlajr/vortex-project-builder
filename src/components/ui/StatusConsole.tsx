@@ -1,9 +1,14 @@
 import React from "react";
-import { useAppModel } from "@/state/app-model";
-import styles from "@/styles/statusconsole.module.css";
 import Link from "next/link";
+
+import { useAppModel } from "@/state/app-model";
 import { codeHref } from "@/core/status/error-codes";
 
+import styles from "@/styles/statusconsole.module.css";
+
+/* -------------------------------------------------------------------------- */
+/*                              STATUS CONSOLE                                */
+/* -------------------------------------------------------------------------- */
 export default function StatusConsole({
   onTutorialStatusClick,
 }: {

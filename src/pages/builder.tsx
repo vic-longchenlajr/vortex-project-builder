@@ -1,4 +1,4 @@
-// src/pages/configurator.tsx
+// src/pages/builder.tsx
 import React from "react";
 import Head from "next/head";
 import dynamic from "next/dynamic";
@@ -10,10 +10,10 @@ import PreEngPrereqModal, {
 } from "@/components/ui/PreEngPrereqModal";
 import SystemOptionsPanel from "@/components/features/systems/SystemOptionsPanel";
 
-import styles from "@/styles/configurator.module.css";
+import styles from "@/styles/builder.module.css";
 import navStyles from "@/styles/navbar.module.css";
 
-import { useAppModel } from "@/state/app-model";
+import { useAppModel, Zone, Enclosure } from "@/state/app-model";
 
 import {
   pickDefaultNozzle,
@@ -285,12 +285,12 @@ function buildHighlights(status: any[]) {
    PAGE
    ────────────────────────────────────────────────────────────── */
 
-export default function ConfiguratorPage() {
+export default function BuilderPage() {
   return (
     <>
       <Navbar />
       <Head>
-        <title>Victaulic Vortex™ | Configurator</title>
+        <title>Victaulic Vortex™ | Builder</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="icon" href="/vx.ico" sizes="any" />
       </Head>{" "}
@@ -354,7 +354,7 @@ function Scaffold() {
 
       // Clean up query params so refresh doesn’t re-trigger tutorial
       try {
-        window.history.replaceState({}, "", "/configurator");
+        window.history.replaceState({}, "", "/builder");
       } catch {
         /* ignore */
       }
@@ -427,8 +427,8 @@ function Scaffold() {
 
       if (forceTutorial) {
         try {
-          window.history.replaceState({}, "", "/configurator");
-        } catch {}
+          window.history.replaceState({}, "", "/builder");
+        } catch { }
       }
     })().catch(console.error);
   }, [disclaimerOpen, loadTutorialProject, clearStatus, setAutosaveEnabled]);
@@ -640,7 +640,7 @@ function Scaffold() {
         {/* MIDDLE */}
         <div className={styles.midCol}>
           <h1 className={styles.builderTitle}>
-            Victaulic Vortex™ Project Configurator
+            Victaulic Vortex™ Project Builder
           </h1>
 
           <div className={styles.controlsSticky} data-controls-sticky="1">
@@ -944,28 +944,6 @@ function ProjectOptionsCard() {
           onChange={(e) => updateProject({ projectLocation: e.target.value })}
           placeholder="City, State / Country"
         />
-
-        <label className={styles.poLabel}>Currency</label>
-        <select
-          className={styles.poControl}
-          value={project.currency}
-          onChange={(e) => updateProject({ currency: e.target.value as any })}
-        >
-          <option value="USD">USD (US Dollar)</option>
-          <option value="EUR">EUR (Euro)</option>
-          <option value="GBP">GBP (British Pound)</option>
-        </select>
-
-        <label className={styles.poLabel}>Units</label>
-        <select
-          className={styles.poControl}
-          value={project.units}
-          onChange={(e) => updateProject({ units: e.target.value as any })}
-        >
-          <option value="imperial">Imperial (ft, °F)</option>
-          <option value="metric">Metric (m, °C)</option>
-        </select>
-
         <label className={styles.poLabel}>Project Elevation</label>
         <select
           className={styles.poControl}
@@ -978,6 +956,103 @@ function ProjectOptionsCard() {
             </option>
           ))}
         </select>
+        <label className={styles.poLabel}>Units</label>
+        <select
+          className={styles.poControl}
+          value={project.units}
+          onChange={(e) => updateProject({ units: e.target.value as any })}
+        >
+          <option value="imperial">Imperial (ft, gal, °F)</option>
+          <option value="metric">Metric (m, L, °C)</option>
+        </select>
+
+        <label className={styles.poLabel}>Currency</label>
+        <select
+          className={styles.poControl}
+          value={project.currency}
+          onChange={(e) => {
+            const prev = project.currency;
+            const next = e.target.value as any;
+
+            let nextCylinderSupply = project.cylinderSupply;
+
+            if (next === "USD") {
+              // Always switch to factory-filled for USD
+              nextCylinderSupply = "FACTORY_FILL";
+            } else {
+              // Switching away from USD -> default to unpressurized
+              // But switching between non-USD currencies should preserve existing value
+              if (prev === "USD" && next !== "USD") {
+                nextCylinderSupply = "LOCAL_FILL";
+              } else {
+                // preserve existing (or default to LOCAL_FILL if missing)
+                nextCylinderSupply = project.cylinderSupply ?? "LOCAL_FILL";
+              }
+            }
+
+            updateProject({
+              currency: next,
+              cylinderSupply: nextCylinderSupply,
+            });
+          }}
+        >
+          <option value="USD">USD (US Dollar)</option>
+          <option value="EUR">EUR (Euro)</option>
+          <option value="GBP">GBP (British Pound)</option>
+        </select>
+
+        {/* Cylinder supply → radios when non-USD */}
+        {project.currency !== "USD" && (
+          <fieldset
+            className={styles.cylFieldset}
+            aria-describedby="cylSupplyHelp"
+          >
+            <legend className={styles.poLabel} style={{ marginBottom: 6 }}>
+              Cylinder Supply
+            </legend>
+
+            <div className={styles.cylOptions}>
+              <label htmlFor="cyl-local" className={styles.cylOptionLabel}>
+                <input
+                  id="cyl-local"
+                  name="cylinderSupply"
+                  type="radio"
+                  value="LOCAL_FILL"
+                  checked={
+                    (project.cylinderSupply ?? "LOCAL_FILL") === "LOCAL_FILL"
+                  }
+                  onChange={() =>
+                    updateProject({ cylinderSupply: "LOCAL_FILL" })
+                  }
+                />
+                <span>
+                  Unpressurized
+                  <br />
+                  <span className={styles.cylSub}>Local Fill</span>
+                </span>
+              </label>
+
+              <label htmlFor="cyl-factory" className={styles.cylOptionLabel}>
+                <input
+                  id="cyl-factory"
+                  name="cylinderSupply"
+                  type="radio"
+                  value="FACTORY_FILL"
+                  checked={project.cylinderSupply === "FACTORY_FILL"}
+                  onChange={() =>
+                    updateProject({ cylinderSupply: "FACTORY_FILL" })
+                  }
+                />
+                <span>Factory Filled</span>
+              </label>
+            </div>
+
+            <div id="cylSupplyHelp" className={styles.cylHelp}>
+              Factory-filled cylinders may not be available in some regions due
+              to shipping regulations.
+            </div>
+          </fieldset>
+        )}
       </div>
     </section>
   );
@@ -988,36 +1063,85 @@ function ProjectOptionsCard() {
    ────────────────────────────────────────────────────────────── */
 
 function PricePanel() {
-  const { project, projectListPrice, updateProject } = useAppModel();
+  const {
+    project,
+    updateProject,
+    engListPrice, // number | null
+    preListPrice, // number | null
+  } = useAppModel();
 
   const currency = project.currency || "USD";
-  const parsed = projectListPrice == null ? null : Number(projectListPrice);
-  const listPriceNum = Number.isFinite(parsed) ? parsed : null;
 
-  const multiplier =
-    typeof project.customerMultiplier === "number"
-      ? project.customerMultiplier
-      : 1;
+  // Use saved project values with sane defaults
+  const engMult =
+    typeof project.priceMultiplierEngineered === "number"
+      ? clamp01(project.priceMultiplierEngineered)
+      : 0.35; // default engineered multiplier
 
-  const listPrice =
-    listPriceNum == null
+  const preMult =
+    typeof project.priceMultiplierPreEngineered === "number"
+      ? clamp01(project.priceMultiplierPreEngineered)
+      : 0.3; // default pre-engineered multiplier (fixed by product)
+
+  function clamp01(v: number) {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  const fmt = (n: number | null) =>
+    n == null
       ? "—"
-      : listPriceNum.toLocaleString(undefined, { style: "currency", currency });
+      : n.toLocaleString(undefined, { style: "currency", currency });
 
-  const netPriceStr =
-    listPriceNum == null
-      ? "—"
-      : (listPriceNum * multiplier).toLocaleString(undefined, {
-          style: "currency",
-          currency,
-        });
-
-  const onMultiplierChange = (raw: string) => {
-    let v = parseFloat(raw);
-    if (Number.isNaN(v)) v = 0;
-    v = Math.max(0, Math.min(1, v));
-    updateProject({ customerMultiplier: Math.round(v * 100) / 100 });
+  const onEngMultChange = (raw: string) => {
+    const n = Number(raw);
+    const v = Number.isFinite(n) ? clamp01(n) : 0;
+    // persist into project so BOM generator can read it
+    updateProject({ priceMultiplierEngineered: Math.round(v * 100) / 100 });
   };
+
+  // Keep pre multiplier non-editable in the UI by default.
+  // If you want to make it editable, wire this to an <input> onChange and call updateProject.
+  const onPreMultChange = (raw: string) => {
+    const n = Number(raw);
+    const v = Number.isFinite(n) ? clamp01(n) : 0;
+    updateProject({ priceMultiplierPreEngineered: Math.round(v * 100) / 100 });
+  };
+
+  // Order blocks by first appearance of each system type
+  const blocks = React.useMemo(() => {
+    const firstIdxEng = project.systems.findIndex(
+      (s) => s.type === "engineered",
+    );
+    const firstIdxPre = project.systems.findIndex(
+      (s) => s.type === "preengineered",
+    );
+
+    return [
+      { key: "engineered" as const, idx: firstIdxEng },
+      { key: "preengineered" as const, idx: firstIdxPre },
+    ]
+      .filter((b) => b.idx >= 0)
+      .sort((a, b) => a.idx - b.idx);
+  }, [project.systems]);
+
+  const engNet = engListPrice == null ? null : engListPrice * engMult;
+  const preNet = preListPrice == null ? null : preListPrice * preMult;
+
+  // simple + correct
+  const projectNet =
+    engNet == null && preNet == null ? null : (engNet ?? 0) + (preNet ?? 0);
+
+  if (blocks.length === 0) {
+    return (
+      <section
+        className={`${styles.section} ${styles.priceCard}`}
+        data-tour="pricing-panel"
+      >
+        <h3 className={styles.priceTitle}>Pricing</h3>
+        <div className={styles.mutedSm}>Add a system to view pricing.</div>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -1026,36 +1150,68 @@ function PricePanel() {
     >
       <h3 className={styles.priceTitle}>Pricing</h3>
 
-      <div className={styles.priceRow}>
-        <span>List Price:</span>
-        <span className={styles.priceValue}>{listPrice}</span>
+      <div className={styles.priceStack}>
+        {blocks.map((b) => {
+          const isEng = b.key === "engineered";
+          const title = isEng ? "Engineered" : "Pre-Engineered";
+          const list = isEng ? engListPrice : preListPrice;
+          const net = isEng ? engNet : preNet;
+          const mult = isEng ? engMult : preMult;
+
+          return (
+            <div key={b.key} className={styles.priceBlock}>
+              <div className={styles.priceBlockHead}>
+                <div
+                  className={styles.priceBlockTitle}
+                  data-type={isEng ? "eng" : "pre"}
+                >
+                  {title}
+                </div>
+
+                <div className={styles.priceBlockMult}>
+                  <span className={styles.mutedSm}>×</span>
+
+                  {/* Engineered: editable; Pre-Engineered: read-only (product fixed) */}
+                  <input
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={toInputValue(mult)}
+                    onChange={(e) =>
+                      isEng
+                        ? onEngMultChange(e.target.value)
+                        : onPreMultChange(e.target.value)
+                    }
+                    className={styles.inputNumXs}
+                    style={{ textAlign: "right" }}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.priceRowTight}>
+                <span className={styles.mutedSm}>List</span>
+                <span className={styles.priceValue}>{fmt(list)}</span>
+              </div>
+
+              <div className={styles.priceRowTight}>
+                <span className={styles.mutedSm}>Net</span>
+                <span className={styles.priceValue}>{fmt(net)}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className={styles.priceRow}>
-        <span>Net Price:</span>
-        <span className={styles.priceValue}>{netPriceStr}</span>
-      </div>
+      <div className={styles.priceDivider} />
 
-      <div className={styles.priceRow}>
-        <label htmlFor="cust-mult" title="0.00–1.00">
-          Multiplier:
-        </label>
-        <input
-          id="cust-mult"
-          type="number"
-          min={0}
-          max={1}
-          step={0.01}
-          value={toInputValue(multiplier)}
-          onChange={(e) => onMultiplierChange(e.target.value)}
-          className={styles.inputNumSm}
-          style={{ textAlign: "right" }}
-        />
+      <div className={styles.priceRowTight}>
+        <span className={styles.priceProjectLabel}>Project Net</span>
+        <span className={styles.priceValue}>{fmt(projectNet)}</span>
       </div>
     </section>
   );
 }
-
 /* ──────────────────────────────────────────────────────────────
    MIDDLE: Systems / Zones / Tables
    (your existing components continue below unchanged)
@@ -1095,9 +1251,8 @@ function SystemCard({
     addZone,
     changeSystemType,
     updateSystemOptions,
-    applyPreEngSystemPartcode,
-    runCalculateAll,
   } = useAppModel();
+
   const isPre = sys.type === "preengineered";
 
   const preOpts = isPre ? (sys.options as any) : null;
@@ -1107,16 +1262,14 @@ function SystemCard({
   return (
     <section
       id={`sys-${sys.id}`}
-      className={`${styles.sysCard} ${
-        isPre ? styles["sysCard--pre"] : styles["sysCard--eng"]
-      }`}
+      className={`${styles.sysCard} ${isPre ? styles["sysCard--pre"] : styles["sysCard--eng"]
+        }`}
     >
       {/* Slim colored header band + system badge */}
       <div className={styles.sysHeader}>
         <span
-          className={`${styles.sysBadge} ${
-            isPre ? styles["sysBadge--pre"] : styles["sysBadge--eng"]
-          }`}
+          className={`${styles.sysBadge} ${isPre ? styles["sysBadge--pre"] : styles["sysBadge--eng"]
+            }`}
         >
           {isPre ? "Pre-Engineered" : "Engineered"}
         </span>
@@ -1172,15 +1325,6 @@ function SystemCard({
                     systemPartCode: e.target.value,
                   } as any)
                 }
-                onBlur={() =>
-                  systemPartCodeLocked && applyPreEngSystemPartcode(sys.id)
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && systemPartCodeLocked) {
-                    e.preventDefault();
-                    applyPreEngSystemPartcode(sys.id);
-                  }
-                }}
                 placeholder="S-xxx-9PE-xxx-xxx-xx"
               />
             </label>
@@ -1246,11 +1390,14 @@ function ZoneCard({
 
   // Pull the system to see if bulk tubes are enabled for this system
   const system = project.systems.find((s) => s.id === sysId);
-  const bulkOn = !!(system?.options as any)?.bulkTubes;
+  const bulkOn = !!(system?.options as any)?.usesBulkTubes;
 
   // Default valve-open time (minutes) when bulk is enabled
   const tOpen = Number(zone.bulkValveOpenTimeMin);
   const tOpenDisplay = Number.isFinite(tOpen) ? tOpen : 10; // default
+
+  const unitVol = project.units === "metric" ? "m³" : "ft³";
+
   const zoneHl = highlights.zoneLevel.get(zone.id) ?? null;
   const zoneHlClass =
     zoneHl === "error"
@@ -1293,6 +1440,44 @@ function ZoneCard({
             − Remove Zone
           </button>
         </div>
+      </div>
+      <div className={styles.rowHeading}>Zone Configuration</div>
+
+      {/* Zone-level rundown time */}
+      <div className={styles.optionGrid}>
+        <div className={styles.fieldBlock}>
+          <label>Rundown Time (min)</label>
+          <input
+            className={styles.inputMd}
+            type="number"
+            min={0}
+            value={toInputValue(zone.rundownTimeMin)}
+            onChange={(e) =>
+              updateZone(sysId, zone.id, {
+                rundownTimeMin: fromNumberInput(e.target.value) ?? null,
+              })
+            }
+          />
+        </div>
+        {/* Zone-level estimated dry water pipe volume */}
+        <div className={styles.fieldBlock}>
+          <label>Est. Dry Water Pipe Vol. ({unitVol})</label>
+          <input
+            className={styles.inputMd}
+            type="number"
+            min={0}
+            value={toInputValue(zone.pipeVolumeGal)}
+            onChange={(e) =>
+              updateZone(sysId, zone.id, {
+                pipeVolumeGal: fromNumberInput(e.target.value) ?? null,
+              })
+            }
+          />
+        </div>
+        <div className={styles.fieldBlock}></div>
+        <div className={styles.fieldBlock}></div>{" "}
+        <div className={styles.fieldBlock}></div>
+        <div className={styles.fieldBlock}></div>
       </div>
 
       <div
@@ -1370,11 +1555,11 @@ function EngineeredEnclosureTable({
           </tr>
         </thead>
         <tbody>
-          {zone.enclosures.map((enc: any, idx: number) => {
-            const method = enc.method as MethodName;
+          {zone.enclosures.map((enc: Enclosure, idx: number) => {
+            const method = enc.designMethod as MethodName;
             const nozzleOptions = getNozzlesForMethod(method);
-            const styleOptions = enc.nozzleCode
-              ? getStylesFor(method, enc.nozzleCode)
+            const styleOptions = enc.nozzleModel
+              ? getStylesFor(method, enc.nozzleModel)
               : [];
             const hl = highlights.encLevel.get(enc.id) ?? null;
             const rowClass =
@@ -1404,10 +1589,10 @@ function EngineeredEnclosureTable({
                     type="number"
                     step={1}
                     className={styles.inputSm}
-                    value={toInputValue(enc.volume)}
+                    value={toInputValue(enc.volumeFt3)}
                     onChange={(e) =>
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        volume: fromNumberInput(e.target.value),
+                        volumeFt3: fromNumberInput(e.target.value),
                       })
                     }
                   />
@@ -1418,10 +1603,10 @@ function EngineeredEnclosureTable({
                     type="number"
                     step={1}
                     className={styles.inputXs}
-                    value={toInputValue(enc.tempF)}
+                    value={toInputValue(enc.temperatureF)}
                     onChange={(e) =>
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        tempF: fromNumberInput(e.target.value),
+                        temperatureF: fromNumberInput(e.target.value),
                       })
                     }
                   />
@@ -1431,15 +1616,14 @@ function EngineeredEnclosureTable({
                   <div className={styles.selectWithPill}>
                     <select
                       className={styles.inputControl}
-                      value={enc.method}
+                      value={enc.designMethod ?? ""}
                       onChange={(e) => {
                         const m = e.target.value as MethodName;
-                        const nz = pickDefaultNozzle(m) as NozzleCode; // engineered
-                        const st = pickStyleOrUndef(m, nz);
+                        // reset nozzle/style on method change
                         updateEnclosure(sysId, zone.id, enc.id, {
-                          method: m,
-                          nozzleCode: nz || undefined,
-                          emitterStyle: st,
+                          designMethod: m,
+                          nozzleModel: pickDefaultNozzle(m),
+                          nozzleOrientation: undefined,
                         });
                       }}
                     >
@@ -1460,14 +1644,14 @@ function EngineeredEnclosureTable({
                 <td>
                   <select
                     className={styles.inputControl}
-                    value={enc.nozzleCode ?? ""}
+                    value={enc.nozzleModel ?? ""}
                     onChange={(e) => {
-                      const method = enc.method as MethodName;
+                      const method = enc.designMethod as MethodName;
                       const nz = e.target.value as NozzleCode;
                       const st = pickStyleOrUndef(method, nz);
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        nozzleCode: nz || undefined,
-                        emitterStyle: st,
+                        nozzleModel: nz || undefined,
+                        nozzleOrientation: st,
                       });
                     }}
                   >
@@ -1482,20 +1666,20 @@ function EngineeredEnclosureTable({
                 <td>
                   <select
                     className={styles.inputControl}
-                    value={enc.emitterStyle ?? ""}
+                    value={enc.nozzleOrientation ?? ""}
                     onChange={(e) => {
-                      const method = enc.method as MethodName;
-                      const nz = (enc.nozzleCode || "") as NozzleCode;
+                      const method = enc.designMethod as MethodName;
+                      const nz = (enc.nozzleModel || "") as NozzleCode;
                       const styles = getStylesFor(method, nz);
                       const chosen = e.target.value as EmitterStyleKey;
                       // Guard against invalid pick (e.g., user had devtools open)
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        emitterStyle: styles.includes(chosen)
+                        nozzleOrientation: styles.includes(chosen)
                           ? chosen
                           : styles[0],
                       });
                     }}
-                    disabled={!enc.nozzleCode}
+                    disabled={!enc.nozzleModel}
                   >
                     {styleOptions.length === 0 ? (
                       <option value="">(no styles)</option>
@@ -1557,11 +1741,12 @@ function EnclosureResultsTable({
           </tr>
         </thead>
         <tbody>
-          {zone.enclosures.map((enc: any, idx: number) => {
-            const calcMinEmitters = enc.minEmitters ?? enc.emitterCount ?? null;
-            const isEditing = !!enc._editEmitters;
+          {zone.enclosures.map((enc: Enclosure, idx: number) => {
+            const calcMinEmitters =
+              enc.requiredNozzleCount ?? enc.requiredNozzleCount ?? null;
+            const isEditing = !!enc.isNozzleCountOverridden;
             const displayEmitters =
-              enc.customMinEmitters ?? calcMinEmitters ?? 0;
+              enc.customNozzleCount ?? calcMinEmitters ?? 0;
             const hl = highlights.encLevel.get(enc.id) ?? null;
             const rowClass =
               hl === "error"
@@ -1578,11 +1763,11 @@ function EnclosureResultsTable({
                     checked={isEditing}
                     onChange={(e) =>
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        _editEmitters: e.target.checked,
+                        isNozzleCountOverridden: e.target.checked,
                         // if turning off, drop the override
                         ...(e.target.checked
                           ? {}
-                          : { customMinEmitters: null }),
+                          : { customNozzleCount: null }),
                       })
                     }
                     title="Enable custom nozzle count"
@@ -1595,8 +1780,8 @@ function EnclosureResultsTable({
                     onChange={(e) => {
                       const val = fromEditableNumber(e.target.value);
                       updateEnclosure(sysId, zone.id, enc.id, {
-                        customMinEmitters:
-                          val === "" ? enc.customMinEmitters : val,
+                        customNozzleCount:
+                          val === "" ? enc.customNozzleCount : val,
                       });
                     }}
                     disabled={!isEditing}
@@ -1604,8 +1789,12 @@ function EnclosureResultsTable({
                   />
                 </td>
                 <td className={styles.center}>{enc.flowCartridge ?? "—"}</td>
-                <td className={styles.center}>{enc.estDischarge ?? "—"}</td>
-                <td className={styles.center}>{enc.estFinalO2 ?? "—"}</td>
+                <td className={styles.center}>
+                  {enc.estimatedDischargeDuration ?? "—"}
+                </td>
+                <td className={styles.center}>
+                  {enc.estimatedFinalOxygenPercent ?? "—"}
+                </td>
               </tr>
             );
           })}
@@ -1615,25 +1804,26 @@ function EnclosureResultsTable({
   );
 }
 
-function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
+function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: Zone }) {
   const { project, updateZone } = useAppModel();
   const unitVol = project.units === "metric" ? "m³" : "ft³";
 
   const totalVolume = (zone.enclosures ?? []).reduce(
-    (sum: number, e: any) => sum + (Number(e.volume) || 0),
+    (sum: number, e: any) => sum + (Number(e.volumeFt3) || 0),
     0,
   );
-  const calcMinCyl = zone.minTotalCylinders ?? null;
-  const editCyl = !!zone._editCylinders;
-  const displayCyl = zone.customMinTotalCylinders ?? calcMinCyl ?? 0;
+  const calcMinCyl = zone.requiredCylinderCount ?? null;
+  const editCyl = !!zone.isCylinderCountOverridden;
+  const displayCyl = zone.customCylinderCount ?? calcMinCyl ?? 0;
   const system = project.systems.find((s) => s.id === sysId);
-  const bulkOn = !!(system?.options as any)?.bulkTubes;
-  const requiredOpen = Number((zone as any).bulkValveOpenTimeMinRequired);
+  const bulkOn = !!(system?.options as any)?.usesBulkTubes;
+  const requiredOpen = Number(zone.bulkValveOpenTimeMinRequired);
   const requiredOpenDisplay = Number.isFinite(requiredOpen) ? requiredOpen : 0;
+  const minWaterTankReq = zone.minWaterTankCapacityGal;
 
-  const editOpen = !!(zone as any)._editBulkValveOpenTimeMin;
+  const editOpen = !!zone.isBulkValveOpenTimeOverridden;
 
-  const tOpen = Number((zone as any).bulkValveOpenTimeMin);
+  const tOpen = Number(zone.bulkValveOpenTimeMin);
   const tOpenDisplay = Number.isFinite(tOpen) ? tOpen : requiredOpenDisplay;
 
   return (
@@ -1669,7 +1859,7 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                   checked={editOpen}
                   onChange={(e) =>
                     updateZone(sysId, zone.id, {
-                      _editBulkValveOpenTimeMin: e.target.checked,
+                      isBulkValveOpenTimeOverridden: e.target.checked,
                       ...(e.target.checked
                         ? {}
                         : { bulkValveOpenTimeMin: requiredOpenDisplay }),
@@ -1711,10 +1901,10 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                   checked={editCyl}
                   onChange={(e) =>
                     updateZone(sysId, zone.id, {
-                      _editCylinders: e.target.checked,
+                      isCylinderCountOverridden: e.target.checked,
                       ...(e.target.checked
                         ? {}
-                        : { customMinTotalCylinders: null }),
+                        : { customCylinderCount: null }),
                     })
                   }
                   title="Enable custom cylinder count"
@@ -1726,8 +1916,8 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
                   onChange={(e) => {
                     const val = fromEditableNumber(e.target.value);
                     updateZone(sysId, zone.id, {
-                      customMinTotalCylinders:
-                        val === "" ? zone.customMinTotalCylinders : val,
+                      customCylinderCount:
+                        val === "" ? zone.customCylinderCount : val,
                     });
                   }}
                   disabled={!editCyl}
@@ -1736,11 +1926,12 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
               </td>
             </tr>
           )}
+
           <tr>
             <td className={styles.kvLabel}>Total N₂ Required</td>
             <td className={styles.kvValue}>
-              {typeof zone.totalNitrogenRequired_scf === "number"
-                ? `${Math.round(zone.totalNitrogenRequired_scf).toLocaleString()} SCF`
+              {typeof zone.nitrogenRequiredScf === "number"
+                ? `${Math.round(zone.nitrogenRequiredScf).toLocaleString()} SCF`
                 : "—"}
             </td>
           </tr>
@@ -1748,8 +1939,20 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: any }) {
           <tr>
             <td className={styles.kvLabel}>Total N₂ Delivered</td>
             <td className={styles.kvValue}>
-              {typeof zone.totalNitrogenDelivered_scf === "number"
-                ? `${Math.round(zone.totalNitrogenDelivered_scf).toLocaleString()} SCF`
+              {typeof zone.nitrogenDeliveredScf === "number"
+                ? `${Math.round(zone.nitrogenDeliveredScf).toLocaleString()} SCF`
+                : "—"}
+            </td>
+          </tr>
+          <tr>
+            <td className={styles.kvLabel}>Min. Water Tank Requirement</td>
+            <td className={styles.kvValue}>
+              {typeof zone?.minWaterTankCapacityGal === "number"
+                ? `${Math.ceil(
+                  zone.minWaterTankCapacityGal,
+                ).toLocaleString()} gal / ${Math.ceil(
+                  (zone.minWaterTankCapacityGal || 0) * 3.78541,
+                ).toLocaleString()} L`
                 : "—"}
             </td>
           </tr>
@@ -1846,7 +2049,7 @@ function EmitterImagePanel({ zone }: { zone: any }) {
   const enc = zone?.enclosures?.[0] ?? null;
 
   // Prefer the computed minimum emitters; fall back to any existing count
-  const raw = enc?.minEmitters ?? enc?.emitterCount;
+  const raw = enc?.requiredNozzleCount ?? enc?.requiredNozzleCount;
   const emitters = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 
   // Guard: if nothing calculated yet, show a helpful note
@@ -1916,6 +2119,7 @@ function PreInputTable({
 
   const unitLen = project.units === "metric" ? "m" : "ft";
   const unitTemp = project.units === "metric" ? "C" : "F";
+  const unitVol = project.units === "metric" ? "m³" : "ft³";
 
   const enc = zone.enclosures[0] ?? {};
   const hl = highlights.encLevel.get(enc.id) ?? null;
@@ -1928,33 +2132,19 @@ function PreInputTable({
 
   const onNum = (v: string) => (isNaN(+v) ? 0 : +v);
 
-  const method = (enc.method ?? "NFPA 770 Class A/C") as MethodName;
+  const method = (enc.designMethod ?? "NFPA 770 Class A/C") as MethodName;
   const nozzleOptions = getNozzlesForMethod(method, {
     systemType: "preengineered",
   });
-  const styleOptions = enc.nozzleCode
-    ? getStylesFor(method, enc.nozzleCode, { systemType: "preengineered" })
+  const styleOptions = enc.nozzleModel
+    ? getStylesFor(method, enc.nozzleModel, { systemType: "preengineered" })
     : [];
-  const setDims = (
-    patch: Partial<{ length: number; width: number; height: number }>,
-  ) => {
-    const L = patch.length ?? enc.length ?? 0;
-    const W = patch.width ?? enc.width ?? 0;
-    const H = patch.height ?? enc.height ?? 0;
-    updateEnclosure(sysId, zone.id, enc.id, {
-      ...patch,
-      length: L,
-      width: W,
-      height: H,
-    });
-  };
-
   return (
     <div className={styles.enclosureTableWrap}>
       <table className={`${styles.enclosureTable} ${styles.preTable}`}>
         <colgroup>
           <col />
-          <col style={{ width: 96 }} />
+          <col style={{ width: 104 }} />
           <col style={{ width: 80 }} />
           <col />
           <col style={{ width: "18%" }} />
@@ -1964,7 +2154,7 @@ function PreInputTable({
         <thead>
           <tr>
             <th>Enclosure Name</th>
-            <th title="Length / Width / Height">L/W/H ({unitLen})</th>
+            <th>Volume ({unitVol})</th>
             <th>Temp (°{unitTemp})</th>
             <th>Design Method</th>
             <th>Nozzle Selection</th>
@@ -1986,55 +2176,20 @@ function PreInputTable({
               />
             </td>
 
-            <td className={styles.dimCell}>
-              <div className={styles.dimStack}>
-                <label className={styles.dimRow}>
-                  <small>L</small>
-                  <input
-                    type="number"
-                    step={1}
-                    className={styles.dimInput}
-                    onChange={(e) =>
-                      setDims({
-                        length: fromNumberInput(e.target.value) as any,
-                      })
-                    }
-                    value={showDash ? "" : toInputValue(enc.length)}
-                    placeholder={showDash ? "—" : undefined}
-                    disabled={locked}
-                  />
-                </label>
-                <label className={styles.dimRow}>
-                  <small>W</small>
-                  <input
-                    type="number"
-                    step={1}
-                    className={styles.dimInput}
-                    value={showDash ? "" : toInputValue(enc.width)}
-                    placeholder={showDash ? "—" : undefined}
-                    onChange={(e) =>
-                      setDims({ width: fromNumberInput(e.target.value) as any })
-                    }
-                    disabled={locked}
-                  />
-                </label>
-                <label className={styles.dimRow}>
-                  <small>H</small>
-                  <input
-                    type="number"
-                    step={1}
-                    className={styles.dimInput}
-                    value={showDash ? "" : toInputValue(enc.height)}
-                    placeholder={showDash ? "—" : undefined}
-                    onChange={(e) =>
-                      setDims({
-                        height: fromNumberInput(e.target.value) as any,
-                      })
-                    }
-                    disabled={locked}
-                  />
-                </label>
-              </div>
+            <td>
+              <input
+                type="number"
+                step={1}
+                className={styles.inputSm}
+                value={showDash ? "" : toInputValue(enc.volumeFt3)}
+                placeholder={showDash ? "—" : undefined}
+                onChange={(e) =>
+                  updateEnclosure(sysId, zone.id, enc.id, {
+                    volumeFt3: fromNumberInput(e.target.value),
+                  })
+                }
+                disabled={locked}
+              />
             </td>
 
             <td>
@@ -2044,10 +2199,10 @@ function PreInputTable({
                 className={styles.inputXs}
                 onChange={(e) =>
                   updateEnclosure(sysId, zone.id, enc.id, {
-                    tempF: onNum(e.target.value),
+                    temperatureF: onNum(e.target.value),
                   })
                 }
-                value={showDash ? "" : (enc.tempF ?? 70)}
+                value={showDash ? "" : (enc.temperatureF ?? 70)}
                 placeholder={showDash ? "—" : undefined}
                 disabled={locked}
               />
@@ -2056,7 +2211,7 @@ function PreInputTable({
             <td>
               <div className={styles.selectWithPill}>
                 <select
-                  value={enc.method ?? "NFPA 770 Class A/C"}
+                  value={enc.designMethod ?? "NFPA 770 Class A/C"}
                   className={styles.inputControl}
                   onChange={(e) => {
                     const m = e.target.value as MethodName;
@@ -2067,9 +2222,9 @@ function PreInputTable({
                       systemType: "preengineered",
                     });
                     updateEnclosure(sysId, zone.id, enc.id, {
-                      method: m,
-                      nozzleCode: nz || undefined,
-                      emitterStyle: st,
+                      designMethod: m,
+                      nozzleModel: nz || undefined,
+                      nozzleOrientation: st,
                     });
                   }}
                   disabled={locked}
@@ -2090,17 +2245,17 @@ function PreInputTable({
             <td>
               <select
                 className={styles.inputControl}
-                value={enc.nozzleCode ?? ""}
+                value={enc.nozzleModel ?? ""}
                 onChange={(e) => {
-                  const method = (enc.method ??
+                  const method = (enc.designMethod ??
                     "NFPA 770 Class A/C") as MethodName;
                   const nz = e.target.value as NozzleCode;
                   const st = pickStyleOrUndef(method, nz, {
                     systemType: "preengineered",
                   });
                   updateEnclosure(sysId, zone.id, enc.id, {
-                    nozzleCode: nz || undefined,
-                    emitterStyle: st,
+                    nozzleModel: nz || undefined,
+                    nozzleOrientation: st,
                   });
                 }}
                 disabled={locked}
@@ -2116,20 +2271,22 @@ function PreInputTable({
             <td>
               <select
                 className={styles.inputControl}
-                value={enc.emitterStyle ?? ""}
+                value={enc.nozzleOrientation ?? ""}
                 onChange={(e) => {
-                  const method = (enc.method ??
+                  const method = (enc.designMethod ??
                     "NFPA 770 Class A/C") as MethodName;
-                  const nz = (enc.nozzleCode || "") as NozzleCode;
+                  const nz = (enc.nozzleModel || "") as NozzleCode;
                   const styles = getStylesFor(method, nz, {
                     systemType: "preengineered",
                   });
                   const chosen = e.target.value as EmitterStyleKey;
                   updateEnclosure(sysId, zone.id, enc.id, {
-                    emitterStyle: styles.includes(chosen) ? chosen : styles[0],
+                    nozzleOrientation: styles.includes(chosen)
+                      ? chosen
+                      : styles[0],
                   });
                 }}
-                disabled={!enc.nozzleCode || locked}
+                disabled={!enc.nozzleModel || locked}
               >
                 {styleOptions.length === 0 ? (
                   <option value="">(no styles)</option>

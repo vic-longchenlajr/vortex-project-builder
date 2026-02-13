@@ -14,8 +14,8 @@ const config: ForgeConfig = {
   },
   makers: [
     new MakerSquirrel({
-      name: "VictaulicVortexProjectConfigurator",
-      setupExe: "Victaulic-Vortex-Project-Configurator-Setup.exe",
+      name: "VictaulicVortexProjectBuilder",
+      setupExe: "Victaulic-Vortex-Project-Builder-Setup.exe",
     }),
   ],
 };

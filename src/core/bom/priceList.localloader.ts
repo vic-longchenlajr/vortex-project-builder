@@ -4,7 +4,7 @@ const LOCAL_PRICE_LIST_PATH = "/database/victaulic-vortex-pricelist.xlsx";
 
 /**
  * Load the Vortex price list from the locally bundled database.
- * This is the authoritative source for pricing in the configurator.
+ * This is the authoritative source for pricing in the builder.
  */
 export async function loadPriceListBytes(): Promise<Uint8Array> {
   const res = await fetch(LOCAL_PRICE_LIST_PATH);

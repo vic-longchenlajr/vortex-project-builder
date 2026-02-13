@@ -1,4 +1,9 @@
 // src/core/ui/disclaimer/disclaimer-store.ts
+
+/* -------------------------------------------------------------------------- */
+/*                                DISCLAIMER STORE                            */
+/* -------------------------------------------------------------------------- */
+
 const KEY_DATE = "vortex:disclaimerDismissedDate";
 const KEY_VER = "vortex:disclaimerDismissedVersion";
 

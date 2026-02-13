@@ -1,6 +1,6 @@
 /* =========================================================
    src/styles/systemoptionspanel.module.css
-   - MUST consume configurator.module.css tokens
+   - MUST consume builder.module.css tokens
    - Avoid hard-coded colors/sizes unless they are truly unique
    ========================================================= */
 
@@ -9,6 +9,7 @@
 .panel {
   display: contents;
 }
+
 /* the visual “panel card” now lives here */
 .panelBody {
   border: 1px dashed var(--line-2);
@@ -22,7 +23,8 @@
 /* Sticky layered system header (under page controls) */
 .stickyBar {
   position: sticky;
-  top: var(--app-sticky-top, 64px); /* <- add a small gap */
+  top: var(--app-sticky-top, 64px);
+  /* <- add a small gap */
   z-index: 998;
 
   /* safe fallback + modern mix */
@@ -48,6 +50,7 @@
   align-items: baseline;
   min-width: 0;
 }
+
 .sysName {
   font-weight: 700;
   font-size: clamp(14px, 2vw, 16px);
@@ -67,11 +70,13 @@
   display: inline-block;
   margin-left: 6px;
 }
+
 .sysTypeEng {
   background: var(--sys-eng-tint);
   border-color: rgba(37, 99, 235, 0.25);
   color: #1e3a8a;
 }
+
 .sysTypePre {
   background: var(--sys-pre-tint);
   border-color: rgba(14, 165, 161, 0.25);
@@ -84,23 +89,26 @@
   grid-auto-flow: column;
   gap: 10px;
 }
+
 .kpi {
   display: grid;
   grid-template-columns: auto auto auto;
   align-items: center;
   gap: 6px;
 }
+
 .kpiLabel {
   font-size: var(--fs-11);
   color: var(--ink-2);
   white-space: nowrap;
 }
+
 .kpiValue {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-/* Rounded numeric input – match configurator control skin */
+/* Rounded numeric input – match builder control skin */
 .kpiInput {
   height: var(--ctl-h);
   padding: var(--ctl-pad-y) 6px;
@@ -122,6 +130,7 @@
   display: inline-flex;
   gap: 4px;
 }
+
 .kpiBtn {
   border: 1px solid #e5e8f1;
   background: var(--surface);
@@ -133,6 +142,7 @@
   font-weight: 700;
   cursor: pointer;
 }
+
 .kpiBtn:hover {
   background: var(--surface-muted);
 }
@@ -173,6 +183,7 @@
   padding-top: 8px;
   border-top: 1px solid rgba(226, 232, 240, 0.9);
 }
+
 .optionRow:first-of-type {
   border-top: none;
 }
@@ -189,6 +200,7 @@
   flex-direction: column;
   gap: 4px;
 }
+
 .fieldBlock label {
   font-size: var(--fs-12);
   color: var(--ink-2);
@@ -218,7 +230,7 @@
   font-size: var(--fs-13);
 }
 
-/* Shared results table styling – match configurator tables */
+/* Shared results table styling – match builder tables */
 .resultsTable {
   width: 100%;
   border: 1px solid var(--line-2);
@@ -231,6 +243,7 @@
   table-layout: auto;
   box-shadow: var(--shadow-1);
 }
+
 .resultsTable thead th {
   background: var(--header-1);
   color: var(--ink-2);
@@ -240,13 +253,16 @@
   border-bottom: 1px solid var(--line-2);
   white-space: nowrap;
 }
+
 .resultsTable td {
   padding: var(--cell-pad-y) var(--cell-pad-x);
   border-bottom: 1px solid #f0f2f8;
 }
+
 .resultsTable tbody tr:nth-child(even) {
   background: var(--row-even);
 }
+
 .resultsTable tbody tr:last-child td {
   border-bottom: none;
 }
@@ -256,6 +272,7 @@
   color: var(--ink-2);
   white-space: nowrap;
 }
+
 .kvValue {
   font-weight: 400;
   text-align: right;
@@ -266,6 +283,7 @@
 .estTable td {
   padding: 4px var(--cell-pad-x);
 }
+
 .estTable thead th {
   padding: var(--cell-pad-y) var(--cell-pad-x);
 }
@@ -278,6 +296,7 @@
   justify-content: flex-end;
   width: 100%;
 }
+
 .estControls input[type="checkbox"] {
   transform: scale(0.95);
 }
@@ -378,6 +397,7 @@
     grid-template-columns: 1fr;
     gap: 6px;
   }
+
   .sysKpis {
     grid-auto-flow: row;
     grid-template-columns: repeat(2, max-content);

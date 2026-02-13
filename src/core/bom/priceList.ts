@@ -5,7 +5,7 @@ import { loadPriceListBytes } from "@/core/bom/priceList.localloader";
 
 const DEFAULT_SHEET = "Configurator";
 const DEFAULT_URL =
-  "https://vortex-bom.victaulicmobile.com/us-config/price-lists/victaulic-vortex-pricelist-2025.xlsx";
+  "https://vortex-bom.victaulicmobile.com/us-config/price-lists/victaulic-vortex-pricelist.xlsx";
 
 function coerceNumber(x: unknown): number {
   if (typeof x === "number") return x;

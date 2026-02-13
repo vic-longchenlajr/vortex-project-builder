@@ -1,4 +1,3 @@
-// src/core/calc/engineered/index.ts
 import {
   Project,
   System,
@@ -10,29 +9,28 @@ import {
   SystemTotals,
   WaterTankCert,
 } from "@/state/app-model";
-import { emitterConfigMap } from "@/core/catalog/emitter.catalog";
 
+import { emitterConfigMap } from "@/core/catalog/emitter.catalog";
 import {
   selectWaterTankStrict,
   maxCapacityForCert,
   prettyCert,
 } from "@/core/catalog/water_tanks.catalog";
-
-import type { Codes } from "@/core/catalog/parts.constants";
 import { statusFromCode } from "@/core/status/error-codes";
 
-/** ─────────────────────────────────────────────────────────────
- *  CONSTANTS & SMALL HELPERS
- *  ────────────────────────────────────────────────────────────*/
+import type { Codes } from "@/core/catalog/parts.constants";
+
+/* -------------------------------------------------------------------------- */
+/*                            CONSTANTS & HELPERS                             */
+/* -------------------------------------------------------------------------- */
 type Num = number;
 
 const T_STD_K = 294.4; // Reference absolute temperature (K)
 const SAFETY_FACTOR = 1.2; // Default safety factor
 const FT3_PER_M3 = 35.3147; // Unit conversion
-const O2_REQ_PCT = 13.36; // Threshold for N2 requirement met
 
 // Flooding factors by design method
-const FLOODING_FACTOR: Record<Enclosure["method"], Num> = {
+const FLOODING_FACTOR: Record<Enclosure["designMethod"], Num> = {
   "NFPA 770 Class A/C": 0.375,
   "NFPA 770 Class B": 0.375,
   "FM Data Centers": 0.375,
@@ -85,15 +83,14 @@ export const CYL_CAP_FMTMS: Record<string, { usable: Num; total: Num }> = {
   "2100 PSI/144.8 BAR": { usable: 384, total: 399 },
 };
 
-const GAL_PER_LITER = 0.264172;
-
 // Unit helpers
-function pipeVolumeToGallons(
-  project: Project,
-  v: number | undefined | null
-): number {
-  const n = Number(v) || 0;
-  return project.units === "metric" ? n * GAL_PER_LITER : n;
+function pipeVolumeToGallons(project: Project, v: number | undefined | null) {
+  const x = Number(v);
+  if (!Number.isFinite(x) || x <= 0) return 0;
+
+  return project.units === "metric"
+    ? x * 264.172 // m³ → gal
+    : x * 7.48052; // ft³ → gal
 }
 
 const clampInt = (n: any, min = 0) =>
@@ -101,17 +98,17 @@ const clampInt = (n: any, min = 0) =>
 
 // “Editable” toggles on enclosure/zone for user overrides
 const hasCustomEmitters = (e: Enclosure) => {
-  return e._editEmitters && e.customMinEmitters != null;
+  return e.isNozzleCountOverridden && e.customNozzleCount != null;
 };
 const getCustomEmitters = (e: Enclosure) => {
-  const v = e.customMinEmitters;
+  const v = e.customNozzleCount;
   if (v == null) return 0;
   return clampInt(v, 0);
 };
 const hasCustomCyl = (z: Zone) =>
-  !!z._editCylinders && z.customMinTotalCylinders != null;
+  !!z.isCylinderCountOverridden && z.customCylinderCount != null;
 const getCustomCyl = (z: Zone) => {
-  const v = z.customMinTotalCylinders;
+  const v = z.customCylinderCount;
   if (v == null) return 0;
   return clampInt(v, 0);
 };
@@ -142,7 +139,7 @@ export function tempToKelvin(project: Project, tInput: number): number {
 
 function getBulkTubeCapacityPerTubeSCF(sys: System): number {
   const opts = asEngineeredOptions(sys);
-  const cap = Number(opts.bulkTubeNitrogenSCF);
+  const cap = Number(opts.bulkTubeCapacityScf || 11500);
   return Number.isFinite(cap) && cap > 0 ? cap : 0;
 }
 function minBulkTubesRequired(requiredSCF: number, capPerTube: number): number {
@@ -156,30 +153,35 @@ export function asEngineeredOptions(sys: System): EngineeredOptions {
   }
   return sys.options;
 }
-function pushNote(enc: any, note: string) {
-  if (!note) return;
+function pushNote(enc: Enclosure | undefined, note: string) {
+  if (!enc || !note) return;
   const arr = Array.isArray(enc.notes) ? enc.notes : (enc.notes = []);
   if (!arr.includes(note)) arr.push(note);
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  METHOD FAMILIES (NEW)
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                              METHOD FAMILIES                               */
+/* -------------------------------------------------------------------------- */
 type MethodFamily = "NFPA" | "FMDC" | "FMTMS";
 
-function methodFamily(m: Enclosure["method"]): MethodFamily {
+function methodFamily(m: Enclosure["designMethod"]): MethodFamily {
   if (m === "NFPA 770 Class A/C" || m === "NFPA 770 Class B") return "NFPA";
   if (m === "FM Data Centers") return "FMDC";
   // Merge Turbines + Machine Spaces as one family
   return "FMTMS";
 }
 
-function designTimeMinForFamily(sys: System, fam: MethodFamily): number {
-  const opts = asEngineeredOptions(sys);
+function designTimeMinForFamily(
+  sys: System,
+  zone: Zone,
+  fam: MethodFamily,
+): number {
   if (fam === "NFPA") return 3;
   if (fam === "FMDC") return 3.5;
-  // FMTMS: both are now 10 + rundown
-  return 10 + (opts.rundownTimeMin || 0);
+
+  // FMTMS: 10 + rundown (zone-level now)
+  const rundown = Number(zone.rundownTimeMin) || 0;
+  return 10 + rundown;
 }
 
 function cylinderCapsForFamily(fam: MethodFamily, fill: string) {
@@ -187,15 +189,17 @@ function cylinderCapsForFamily(fam: MethodFamily, fill: string) {
   return table[fill] ?? table["3000 PSI/206.8 BAR"];
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  EMITTER / NOZZLE LOOKUPS & O2
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                           EMITTER / NOZZLE LOOKUP                          */
+/* -------------------------------------------------------------------------- */
 
 // Estimation for FM Turbines / Machine Spaces (piecewise)
 function estimateFMTMSEmitters(project: Project, enc: Enclosure): number {
-  const vol_ft3 = volToFt3(project, Number(enc.volume) || 0);
+  const vol_ft3 = volToFt3(project, Number(enc.volumeFt3) || 0);
   const vol_m3 =
-    project.units === "metric" ? Number(enc.volume) || 0 : vol_ft3 / FT3_PER_M3;
+    project.units === "metric"
+      ? Number(enc.volumeFt3) || 0
+      : vol_ft3 / FT3_PER_M3;
   const isMetric = project.units === "metric";
 
   const lowVol = isMetric ? 580 : 20485;
@@ -212,8 +216,8 @@ function estimateFMTMSEmitters(project: Project, enc: Enclosure): number {
 
 export function getNozzleFlowSCFM(enc: Enclosure): number {
   try {
-    const methodMap = (emitterConfigMap as any)[enc.method];
-    const nozzle = enc.nozzleCode ? methodMap?.[enc.nozzleCode] : undefined;
+    const methodMap = (emitterConfigMap as any)[enc.designMethod];
+    const nozzle = enc.nozzleModel ? methodMap?.[enc.nozzleModel] : undefined;
     const q = nozzle?.q_n2;
     return typeof q === "number" && q > 0 ? q : 0;
   } catch {
@@ -222,8 +226,8 @@ export function getNozzleFlowSCFM(enc: Enclosure): number {
 }
 export function getNozzleWaterGPM(enc: Enclosure): number {
   try {
-    const methodMap = (emitterConfigMap as any)[enc.method];
-    const nozzle = enc.nozzleCode ? methodMap?.[enc.nozzleCode] : undefined;
+    const methodMap = (emitterConfigMap as any)[enc.designMethod];
+    const nozzle = enc.nozzleModel ? methodMap?.[enc.nozzleModel] : undefined;
     const q = nozzle?.q_water;
     return typeof q === "number" && q > 0 ? q : 0;
   } catch {
@@ -232,8 +236,8 @@ export function getNozzleWaterGPM(enc: Enclosure): number {
 }
 function getNozzleOpPSI(enc: Enclosure): number {
   try {
-    const methodMap = (emitterConfigMap as any)[enc.method];
-    const nozzle = enc.nozzleCode ? methodMap?.[enc.nozzleCode] : undefined;
+    const methodMap = (emitterConfigMap as any)[enc.designMethod];
+    const nozzle = enc.nozzleModel ? methodMap?.[enc.nozzleModel] : undefined;
     const p = nozzle?.op_psi;
     return typeof p === "number" && p > 0 ? p : 0;
   } catch {
@@ -257,19 +261,19 @@ export function computeO2Percent({
   return 20.95 * Math.exp(exponent);
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  USER OVERRIDES (ESTIMATES EDITING)
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                            USER ESTIMATE EDITS                             */
+/* -------------------------------------------------------------------------- */
 type EstKey = keyof EngineeredEstimates;
 
 function useUserFor(sys: System, field: EstKey): boolean {
   const o: any = sys.options || {};
-  return !!(o._editEstimates && o._editEstimates[field]);
+  return !!(o.estimateOverrides && o.estimateOverrides[field]);
 }
 function persistEditable(
   userValue: unknown,
   computed: number,
-  edit: boolean
+  edit: boolean,
 ): number {
   const n =
     typeof userValue === "number" && Number.isFinite(userValue)
@@ -278,9 +282,9 @@ function persistEditable(
   return edit ? (n ?? computed) : computed;
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  FACP TOTALS (SYSTEM-LEVEL ESTIMATION)
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                                FACP TOTALS                                 */
+/* -------------------------------------------------------------------------- */
 type FacpTotals = { supervisory: number; alarm: number; releasing: number };
 
 function estimateFacpTotalsFromDesign(params: {
@@ -300,11 +304,8 @@ function estimateFacpTotalsFromDesign(params: {
     return s + (typeof q === "number" ? q : 0);
   }, 0);
 
-  const panelStyle: "ar" | "dc" =
-    (zonesUsed.find((z) => z.panelSizing?.style)?.panelSizing?.style ??
-      opts.panelStyle) === "dc"
-      ? "dc"
-      : "ar";
+  const panelStyle = (zonesUsed.find((z) => z.panelSizing?.style)?.panelSizing
+    ?.style ?? opts.panelStyle) as "ar" | "dc";
 
   let supervisory = 0;
   let alarm = 0;
@@ -330,44 +331,188 @@ function estimateFacpTotalsFromDesign(params: {
   return { supervisory, alarm, releasing };
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  PANEL/HOSE/RACK ESTIMATORS (COUNTS ONLY)
- *  ────────────────────────────────────────────────────────────*/
-function estimatePrimaryReleaseAssembliesFromZones(
-  zones: Zone[],
-  maxCylAcrossZones: number
-): number {
-  if (!maxCylAcrossZones || maxCylAcrossZones <= 0) return 0;
-  const totals = zones
-    .map((z) => Number(z.minTotalCylinders || 0))
-    .filter((n) => n > 0);
-  if (totals.length === 0) return 0;
-  const uniqueCounts = Array.from(new Set(totals));
-  if (totals.length === 1) return Math.ceil(maxCylAcrossZones / 24);
-  if (maxCylAcrossZones <= 24) {
-    switch (uniqueCounts.length) {
-      case 1:
-        return 1;
-      case 2:
-        return 2;
-      case 3:
-        return 3;
-      default:
-        return 4;
+/* -------------------------------------------------------------------------- */
+/*                      PANEL / HOSE / RACK ESTIMATORS                        */
+/* -------------------------------------------------------------------------- */
+type ZoneLike = {
+  id?: string;
+  name?: string;
+  requiredCylinderCount?: number | null;
+};
+
+function toPosInt(n: unknown): number {
+  const x = Number(n);
+  return Number.isFinite(x) && x > 0 ? Math.floor(x) : 0;
+}
+function ceilDiv(a: number, b: number): number {
+  return b > 0 ? Math.ceil(a / b) : 0;
+}
+
+function buildBanksFromDiffs(uniqueSorted: number[], maxBankSize: number) {
+  // banks that make each group a prefix sum
+  const diffs = uniqueSorted.map((g, i) =>
+    i === 0 ? g : g - uniqueSorted[i - 1],
+  );
+  const banks: number[] = [];
+  for (const d of diffs) {
+    if (d <= 0) continue;
+    const full = Math.floor(d / maxBankSize);
+    const rem = d % maxBankSize;
+    for (let i = 0; i < full; i++) banks.push(maxBankSize);
+    if (rem > 0) banks.push(rem);
+    if (rem === 0 && full > 0) {
+      // nothing
+    } else if (rem === 0 && full === 0) {
+      // d < maxBankSize handled by rem push
     }
-  } else if (maxCylAcrossZones <= 48) {
-    switch (uniqueCounts.length) {
-      case 1:
-        return 2;
-      case 2:
-        return 3;
-      default:
-        return 4;
-    }
-  } else if (maxCylAcrossZones <= 72) {
-    return uniqueCounts.length === 1 ? 3 : 4;
   }
-  return Math.ceil(maxCylAcrossZones / 24);
+  return banks;
+}
+
+function buildBanksConstructive(maxCyl: number, maxBankSize: number) {
+  const banks: number[] = [];
+  let cumulative = 0;
+
+  while (cumulative < maxCyl) {
+    const remaining = maxCyl - cumulative;
+    const next = Math.min(maxBankSize, cumulative + 1, remaining);
+    if (next <= 0) break;
+    banks.push(next);
+    cumulative += next;
+
+    if (banks.length > 2000) break; // guard rail
+  }
+  return banks;
+}
+
+function greedyPickBanks(banks: number[], target: number) {
+  // stable greedy: largest -> smallest
+  const picks: number[] = [];
+  let remaining = target;
+
+  for (let i = banks.length - 1; i >= 0; i--) {
+    const size = banks[i];
+    if (size <= remaining) {
+      picks.push(i + 1); // 1-based index
+      remaining -= size;
+      if (remaining === 0) break;
+    }
+  }
+
+  // If remaining != 0, target wasn’t achievable with these banks (should be rare if banks built sanely)
+  return { picks: picks.sort((a, b) => a - b), remaining };
+}
+
+export function buildPrimariesPlanFromZones(
+  zones: ZoneLike[],
+  params: { bulkSelected: boolean; maxBankSize: number },
+) {
+  const { bulkSelected, maxBankSize } = params;
+
+  const zoneCylinders = zones
+    .map((z) => ({
+      zoneId: String((z as any).id ?? ""),
+      zoneName: String((z as any).name ?? ""),
+      requiredCyl: toPosInt((z as any).requiredCylinderCount),
+    }))
+    .filter((z) => z.requiredCyl > 0);
+
+  if (bulkSelected || zoneCylinders.length === 0) {
+    return {
+      maxBankSize,
+      bulkSelected: true,
+      zoneCylinders,
+      groupsUniqueSorted: [],
+      maxCyl: 0,
+      calcPrimaries: 0,
+      maxPrimaries: 0,
+      primariesUsed: 0,
+      methodUsed: "calc" as const,
+      banks: [],
+      releaseGroups: [],
+    };
+  }
+
+  const groupsUniqueSorted = Array.from(
+    new Set(zoneCylinders.map((z) => z.requiredCyl)),
+  ).sort((a, b) => a - b);
+
+  const maxCyl = groupsUniqueSorted[groupsUniqueSorted.length - 1];
+
+  // Method 2: calc primaries from diffs
+  let calcPrimaries = 0;
+  for (let i = 0; i < groupsUniqueSorted.length; i++) {
+    const diff =
+      i === 0
+        ? groupsUniqueSorted[0]
+        : groupsUniqueSorted[i] - groupsUniqueSorted[i - 1];
+    if (diff > 0) calcPrimaries += ceilDiv(diff, maxBankSize);
+  }
+
+  // Method 1: constructive
+  const maxBanksSizes = buildBanksConstructive(maxCyl, maxBankSize);
+  const maxPrimaries = maxBanksSizes.length;
+
+  const methodUsed: "calc" | "max" =
+    calcPrimaries <= maxPrimaries ? "calc" : "max";
+  const primariesUsed = Math.min(calcPrimaries, maxPrimaries);
+
+  // Choose bank sizing strategy based on chosen method
+  const bankSizes =
+    methodUsed === "calc"
+      ? buildBanksFromDiffs(groupsUniqueSorted, maxBankSize)
+      : maxBanksSizes;
+
+  const banks = bankSizes.map((size, i) => ({ bankIndex: i + 1, size }));
+
+  // Build release groups per zone
+  const releaseGroups = zoneCylinders.map((z) => {
+    if (methodUsed === "calc") {
+      // prefix strategy: find which group index matches this requiredCyl
+      const idx = groupsUniqueSorted.indexOf(z.requiredCyl);
+      const prefixCount = (() => {
+        // number of banks needed to reach that group in diff-built banks
+        // easiest: walk sums
+        let sum = 0;
+        for (let i = 0; i < bankSizes.length; i++) {
+          sum += bankSizes[i];
+          if (sum >= z.requiredCyl) return i + 1;
+        }
+        return bankSizes.length;
+      })();
+
+      const bankIndices = Array.from({ length: prefixCount }, (_, i) => i + 1);
+      const totalCyl = bankIndices.reduce(
+        (s, bi) => s + (banks[bi - 1]?.size ?? 0),
+        0,
+      );
+
+      return { ...z, bankIndices, totalCyl };
+    }
+
+    // methodUsed === "max": greedy subset pick
+    const picked = greedyPickBanks(bankSizes, z.requiredCyl);
+    const totalCyl = picked.picks.reduce(
+      (s, bi) => s + (banks[bi - 1]?.size ?? 0),
+      0,
+    );
+
+    return { ...z, bankIndices: picked.picks, totalCyl };
+  });
+
+  return {
+    maxBankSize,
+    bulkSelected,
+    zoneCylinders,
+    groupsUniqueSorted,
+    maxCyl,
+    calcPrimaries,
+    maxPrimaries,
+    primariesUsed,
+    methodUsed,
+    banks,
+    releaseGroups,
+  };
 }
 function estimateAdjacentRackHosesFromZones(maxCylAcrossZones: number) {
   if (maxCylAcrossZones <= 12) return 0;
@@ -379,9 +524,9 @@ function estimateDoubleStackedRackHoseFromZones(maxCylAcrossZones: number) {
   return Math.ceil(maxCylAcrossZones / 24);
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  CORE FORWARD-FLOW EQUATIONS
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                         CORE CALCULATION EQUATIONS                         */
+/* -------------------------------------------------------------------------- */
 function sum<T>(arr: T[], f: (x: T) => number) {
   return arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 }
@@ -404,7 +549,7 @@ function enclosureFlowReq_SCFM(Qreq_enc_SCF: Num, t_design_min: Num): Num {
 }
 function requiredEmittersForEnclosure(
   Qreq_flow_SCFM: Num,
-  qNoz_SCFM: Num
+  qNoz_SCFM: Num,
 ): number {
   if (qNoz_SCFM <= 0) return 0;
   return Math.max(0, Math.ceil(Qreq_flow_SCFM / qNoz_SCFM));
@@ -413,9 +558,9 @@ function estimatedTdForEnclosure(Qreq_enc_SCF: Num, Q_flow_enc_SCFM: Num): Num {
   return Q_flow_enc_SCFM > 0 ? Qreq_enc_SCF / Q_flow_enc_SCFM : 0;
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  UNIFIED ZONE ROW
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                            UNIFIED ZONE ROW                                */
+/* -------------------------------------------------------------------------- */
 type ZoneRow = {
   enc: Enclosure;
   V_ft3: number;
@@ -433,23 +578,23 @@ type ZoneRow = {
   t_est_min: number;
 };
 
-/** ─────────────────────────────────────────────────────────────
- *  ROW BUILDERS (FORWARD + FMTMS)
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                              ROW BUILDERS                                  */
+/* -------------------------------------------------------------------------- */
 function buildRowsForwardLike(
   p: Project,
   sys: System,
   zone: Zone,
   fam: "NFPA" | "FMDC",
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): ZoneRow[] {
   const acf = ACF_BY_ELEVATION[p.elevation] ?? 1.0;
-  const t_design = designTimeMinForFamily(sys, fam);
+  const t_design = designTimeMinForFamily(sys, zone, fam);
 
   return (zone.enclosures ?? []).map((enc) => {
-    const V_ft3 = volToFt3(p, Number(enc.volume) || 0);
-    const T_K = tempToKelvin(p, Number(enc.tempF) || 70);
-    const ff = FLOODING_FACTOR[enc.method] ?? 0.375;
+    const V_ft3 = volToFt3(p, Number(enc.volumeFt3) || 0);
+    const T_K = tempToKelvin(p, Number(enc.temperatureF) || 70);
+    const ff = FLOODING_FACTOR[enc.designMethod] ?? 0.375;
 
     const Qreq_enc_SCF = enclosureQreq_N2_enc_ft3({
       V_ft3,
@@ -489,8 +634,8 @@ function buildRowsForwardLike(
         statusFromCode(
           "ENC.CUSTOM_NOZZLES",
           { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
-          { name: enc.name, final: emitters_final, calc: emitters_calc }
-        )
+          { name: enc.name, final: emitters_final, calc: emitters_calc },
+        ),
       );
     }
 
@@ -502,8 +647,8 @@ function buildRowsForwardLike(
         statusFromCode(
           "ENC.NFPA_LOW_DISCHARGE",
           { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
-          { name: enc.name, t_est: ceil2(t_est) }
-        )
+          { name: enc.name, t_est: ceil2(t_est) },
+        ),
       );
     }
 
@@ -512,8 +657,8 @@ function buildRowsForwardLike(
         statusFromCode(
           "ENC.FMDC_MIN_DISCHARGE",
           { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
-          { t_actual: ceil2(t_est) } // ceiling display
-        )
+          { t_actual: ceil2(t_est) }, // ceiling display
+        ),
       );
     }
 
@@ -539,15 +684,15 @@ function buildRowsFMTMS(
   p: Project,
   sys: System,
   zone: Zone,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): ZoneRow[] {
   const acf = ACF_BY_ELEVATION[p.elevation] ?? 1.0;
-  const t_design = designTimeMinForFamily(sys, "FMTMS");
+  const t_design = designTimeMinForFamily(sys, zone, "FMTMS");
 
   return (zone.enclosures ?? []).map((enc) => {
-    const V_ft3 = volToFt3(p, Number(enc.volume) || 0);
-    const T_K = tempToKelvin(p, Number(enc.tempF) || 70);
-    const ff = FLOODING_FACTOR[enc.method] ?? 0.375;
+    const V_ft3 = volToFt3(p, Number(enc.volumeFt3) || 0);
+    const T_K = tempToKelvin(p, Number(enc.temperatureF) || 70);
+    const ff = FLOODING_FACTOR[enc.designMethod] ?? 0.375;
 
     // defaults used previously in legacy path
     let qNoz_SCFM = getNozzleFlowSCFM(enc);
@@ -568,8 +713,8 @@ function buildRowsFMTMS(
         statusFromCode(
           "ENC.CUSTOM_NOZZLES",
           { systemId: sys.id, zoneId: zone.id, enclosureId: enc.id },
-          { name: enc.name, final: emitters_final, calc: emitters_calc }
-        )
+          { name: enc.name, final: emitters_final, calc: emitters_calc },
+        ),
       );
     }
 
@@ -597,24 +742,24 @@ function buildRowsFMTMS(
   });
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  SHARED ZONE SIZING STEPS
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                           SHARED ZONE SIZING                               */
+/* -------------------------------------------------------------------------- */
 function sizeStorageFromRows(
   p: Project,
   sys: System,
   zone: Zone,
-  rows: ZoneRow[]
+  rows: ZoneRow[],
 ) {
   const opts = asEngineeredOptions(sys);
-  const bulkOn = !!opts.bulkTubes;
+  const bulkOn = !!opts.usesBulkTubes;
 
   const QN2_zone_SCFM = rows.reduce((s, r) => s + r.Q_flow_enc_SCFM, 0);
 
   // controlling time = highest enclosure estimated discharge time
   const td_highest_est_min = rows.reduce(
     (m, r) => Math.max(m, r.t_est_min || 0),
-    0
+    0,
   );
 
   const Wreq_zone_SCF_raw = QN2_zone_SCFM * td_highest_est_min;
@@ -636,7 +781,7 @@ function computePerEnclosureO2AndExposeUnified(
     Wprov_zone_SCF: number;
     QN2_zone_SCFM: number;
     suppressDischargeTime: boolean;
-  }
+  },
 ) {
   const { Wprov_zone_SCF, QN2_zone_SCFM, suppressDischargeTime } = params;
 
@@ -653,15 +798,22 @@ function computePerEnclosureO2AndExposeUnified(
       acf: r.acf,
     });
     const flowLabel = r.qWater_GPM > 0 ? `${r.qWater_GPM} GPM` : "—";
-    const dischargeLabel = r.t_est_min > 0 ? `${ceil2(r.t_est_min)} min` : "—";
+    const dischargeLabel = suppressDischargeTime
+      ? "—"
+      : r.t_est_min > 0
+        ? `${ceil2(r.t_est_min)} min`
+        : "—";
+
     return {
       ...r.enc,
-      minEmitters: r.emitters_final,
-      estDischarge: dischargeLabel,
-      estFinalO2: Number.isFinite(o2_final) ? `${ceil2(o2_final)} %` : "—",
+      requiredNozzleCount: r.emitters_final,
+      estimatedDischargeDuration: dischargeLabel,
+      estimatedFinalOxygenPercent: Number.isFinite(o2_final)
+        ? `${ceil2(o2_final)} %`
+        : "—",
       flowCartridge: flowLabel,
-      qWater_gpm: r.qWater_GPM,
-      qWaterTotal_gpm: r.qWater_GPM * r.emitters_final,
+      waterFlowRateGpm: r.qWater_GPM,
+      totalWaterFlowRateGpm: r.qWater_GPM * r.emitters_final,
     } as Enclosure;
   });
 
@@ -670,15 +822,18 @@ function computePerEnclosureO2AndExposeUnified(
 
 function computeZoneWaterAndTank(
   p: Project,
-  sys: System,
+  zone: Zone,
   encsOut: Enclosure[],
-  t_flow_zone_min: number
+  t_flow_zone_min: number,
 ) {
-  const opts = asEngineeredOptions(sys);
-  const qWaterPeak_GPM = sum(encsOut, (e) => Number(e.qWaterTotal_gpm) || 0);
+  const qWaterPeak_GPM = sum(
+    encsOut,
+    (e) => Number(e.totalWaterFlowRateGpm) || 0,
+  );
   const zoneWaterDischarge_GAL = qWaterPeak_GPM * t_flow_zone_min;
 
-  const pipeVolGal = pipeVolumeToGallons(p, opts.estimatedPipeVolume);
+  // zone-level now (UI shows ft³/m³; pipeVolumeToGallons converts metric m³ -> gal)
+  const pipeVolGal = pipeVolumeToGallons(p, zone.pipeVolumeGal);
   const zoneTankMin_GAL = (zoneWaterDischarge_GAL + pipeVolGal) * SAFETY_FACTOR;
 
   return {
@@ -690,57 +845,59 @@ function computeZoneWaterAndTank(
 
 function sizePanelsFromZoneFlow(
   sys: System,
-  zoneTotalFlow_SCFM: number
+  zoneTotalFlow_SCFM: number,
 ): {
   bore: "1in" | "1.5in";
-  capacity: number;
+  capacity: 1800 | 4500;
   qty: number;
   style: "ar" | "dc";
 } {
   const opts = asEngineeredOptions(sys);
+
   const bore: "1in" | "1.5in" = zoneTotalFlow_SCFM <= 1800 ? "1in" : "1.5in";
-  const capacity = bore === "1in" ? 1800 : 4500;
+  const capacity: 1800 | 4500 = bore === "1in" ? 1800 : 4500;
   const qty =
     zoneTotalFlow_SCFM > 0 ? Math.ceil(zoneTotalFlow_SCFM / capacity) : 0;
-  const style: "ar" | "dc" = (opts.panelStyle === "dc" ? "dc" : "ar") as any;
+  const style: "ar" | "dc" = opts.panelStyle === "dc" ? "dc" : "ar";
+
   return { bore, capacity, qty, style };
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  UNIFIED ZONE CALC (REPLACES calcZone_TotalFloodNFPA + calcZone_Legacy)
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                          UNIFIED ZONE CALCULATION                          */
+/* -------------------------------------------------------------------------- */
 function calcZone_EngineeredUnified(
   p: Project,
   sys: System,
   zone: Zone,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): Zone {
   const encs = zone.enclosures ?? [];
   if (encs.length === 0) return zone;
 
-  const families = new Set(encs.map((e) => methodFamily(e.method)));
+  const families = new Set(encs.map((e) => methodFamily(e.designMethod)));
 
   if (families.size > 1) {
-    // Return early so no enclosure-level logic runs
     return {
       ...zone,
       enclosures: encs.map((e) => ({
         ...e,
-        estDischarge: "—",
-        estFinalO2: "—",
+        estimatedDischargeDuration: "—",
+        estimatedFinalOxygenPercent: "—",
       })),
-      totalNitrogenRequired_scf: 0 as any,
-      totalNitrogenDelivered_scf: 0 as any,
-      minTotalCylinders: 0,
-      q_n2_peak_scfm: 0 as any,
-      water_peak_gpm: 0 as any,
-      waterDischarge_gal: 0 as any,
-      waterTankMin_gal: 0 as any,
-      ...({
-        panelSizing: { bore: "1in", capacity: 1800, qty: 0, style: "ar" },
-        panelSizingByPressure: [],
-        designLabel: "spec_hazards",
-      } as any),
+
+      nitrogenRequiredScf: 0,
+      nitrogenDeliveredScf: 0,
+      requiredCylinderCount: 0,
+
+      peakNitrogenFlowRateScfm: 0,
+      peakWaterFlowRateGpm: 0,
+      waterDischargeVolumeGal: 0,
+      minWaterTankCapacityGal: 0,
+
+      panelSizing: { bore: "1in", capacity: 1800, qty: 0, style: "ar" },
+      panelSizingByPressure: [],
+      designLabel: "spec_hazards",
     };
   }
 
@@ -778,7 +935,7 @@ function calcZone_EngineeredUnified(
   const fillPressure = sys.options.fillPressure || "3000 PSI/206.8 BAR";
   const caps = cylinderCapsForFamily(fam, fillPressure);
 
-  const bulkOn = !!opts.bulkTubes;
+  const bulkOn = !!opts.usesBulkTubes;
 
   let Wprov_zone_SCF = 0;
   let t_flow_zone_min = 0;
@@ -791,7 +948,7 @@ function calcZone_EngineeredUnified(
   if (bulkOn) {
     const requiredOpenMin = t_display_min;
 
-    const isEditingOpen = !!zone._editBulkValveOpenTimeMin;
+    const isEditingOpen = !!zone.isBulkValveOpenTimeOverridden;
 
     const userOpenRaw = Number(zone.bulkValveOpenTimeMin);
     const userOpen = Number.isFinite(userOpenRaw)
@@ -800,7 +957,7 @@ function calcZone_EngineeredUnified(
 
     // Clamp to at least required time; store CEIL to 2 decimals
     const tOpen = ceil2(
-      isEditingOpen ? Math.max(requiredOpenMin, userOpen) : requiredOpenMin
+      isEditingOpen ? Math.max(requiredOpenMin, userOpen) : requiredOpenMin,
     );
 
     zone.bulkValveOpenTimeMinRequired = requiredOpenMin;
@@ -818,7 +975,7 @@ function calcZone_EngineeredUnified(
   } else {
     minCylinders = Math.max(
       0,
-      Math.ceil(Wreq_zone_SCF / Math.max(1, caps.total))
+      Math.ceil(Wreq_zone_SCF / Math.max(1, caps.total)),
     );
     cyl_final = hasCustomCyl(zone) ? getCustomCyl(zone) : minCylinders;
 
@@ -828,8 +985,8 @@ function calcZone_EngineeredUnified(
         statusFromCode(
           "ZONE.CUSTOM_CYLINDERS",
           { systemId: sys.id, zoneId: zone.id },
-          { actual: cyl_final, recommended: minCylinders }
-        )
+          { actual: cyl_final, recommended: minCylinders },
+        ),
       );
     }
 
@@ -848,8 +1005,8 @@ function calcZone_EngineeredUnified(
           provided: Math.round(Wprov_zone_SCF),
           required: Math.round(Wreq_zone_SCF),
           bulkOn,
-        }
-      )
+        },
+      ),
     );
   }
 
@@ -871,8 +1028,8 @@ function calcZone_EngineeredUnified(
             delivered: Math.round(WN2_enc_SCF),
             required: Math.round(r.Qreq_enc_SCF),
             bulkOn,
-          }
-        )
+          },
+        ),
       );
     }
   }
@@ -887,11 +1044,11 @@ function calcZone_EngineeredUnified(
       Wprov_zone_SCF,
       QN2_zone_SCFM,
       suppressDischargeTime: n2CalcError,
-    }
+    },
   );
 
   // Water + tank (use actual flow time derived from provided nitrogen)
-  const water = computeZoneWaterAndTank(p, sys, encsOut, t_flow_zone_min);
+  const water = computeZoneWaterAndTank(p, zone, encsOut, t_flow_zone_min);
 
   // Panel grouping by operating pressure
   const flowByPSI = new Map<number, number>();
@@ -923,8 +1080,8 @@ function calcZone_EngineeredUnified(
       statusFromCode(
         "ZONE.MULTI_OP_PSI",
         { systemId: sys.id, zoneId: zone.id },
-        { psiList }
-      )
+        { psiList },
+      ),
     );
   }
 
@@ -938,47 +1095,45 @@ function calcZone_EngineeredUnified(
     ...zone,
     enclosures: encsOut,
 
-    totalNitrogenRequired_scf: ceil2(Wreq_zone_SCF) as any,
-    totalNitrogenDelivered_scf: ceil2(Wprov_zone_SCF) as any,
+    nitrogenRequiredScf: ceil2(Wreq_zone_SCF),
+    nitrogenDeliveredScf: ceil2(Wprov_zone_SCF),
 
-    minTotalCylinders: bulkOn ? 0 : cyl_final,
+    requiredCylinderCount: bulkOn ? 0 : cyl_final,
     ...(bulkOn ? { minTotalTubes: zone.minTotalTubes } : {}),
 
-    q_n2_peak_scfm: QN2_zone_SCFM as any,
-    water_peak_gpm: water.qWaterPeak_GPM as any,
-    waterDischarge_gal: water.zoneWaterDischarge_GAL as any,
-    waterTankMin_gal: water.zoneTankMin_GAL as any,
+    peakNitrogenFlowRateScfm: QN2_zone_SCFM,
+    peakWaterFlowRateGpm: water.qWaterPeak_GPM,
+    waterDischargeVolumeGal: water.zoneWaterDischarge_GAL,
+    minWaterTankCapacityGal: water.zoneTankMin_GAL,
 
-    ...({
-      panelSizing,
-      panelSizingByPressure,
-      designLabel,
-    } as any),
+    panelSizing,
+    panelSizingByPressure,
+    designLabel,
   };
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  SYSTEM CALC (PER SYSTEM): ZONES → TANK → ESTIMATES → TOTALS
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                             SYSTEM CALCULATION                             */
+/* -------------------------------------------------------------------------- */
 function calcSystem_TotalFloodNFPA(
   project: Project,
   sys: System,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): System {
-  if (sys.options.kind !== "engineered") return sys;
+  if (sys.type !== "engineered") return sys;
 
   // Unified zone calc replaces legacy branching
   const zones = sys.zones.map((z) =>
-    calcZone_EngineeredUnified(project, sys, z, messages)
+    calcZone_EngineeredUnified(project, sys, z, messages),
   );
 
   // Water tank selection (strict matching to chosen certification)
   const zoneNeeds = zones
-    .map((z) => Number(z.waterTankMin_gal) || 0)
+    .map((z) => Number(z.minWaterTankCapacityGal) || 0)
     .filter((g) => g > 0);
   const maxReqGal = zoneNeeds.length ? Math.max(...zoneNeeds) : 0;
 
-  const opts: EngineeredOptions = { ...sys.options };
+  const opts = sys.options as EngineeredOptions;
   const defaultCert: WaterTankCert =
     project.currency === "USD" ? "ASME/FM" : "CE";
   const cert: WaterTankCert = opts.waterTankCertification ?? defaultCert;
@@ -1001,44 +1156,51 @@ function calcSystem_TotalFloodNFPA(
             reqGal: Math.ceil(maxReqGal),
             certPretty: prettyCert(cert),
             maxGal: Math.ceil(maxAvail),
-          }
-        )
+          },
+        ),
       );
     }
   }
 
-  opts.waterTankRequired_gal = maxReqGal;
+  opts.requiredWaterTankCapacityGal = maxReqGal;
   opts.waterTankCertification = cert;
-  opts.waterTankPick = pickCodes;
-  opts.waterTankPickDesc = pickDesc;
+  opts.selectedWaterTankPartCode = pickCodes;
+  opts.selectedWaterTankPartDesc = pickDesc;
 
   // 3) Engineered estimates (panels, primaries, hoses, batteries, FACP)
   const maxCylAcrossZones = Math.max(
     0,
-    ...zones.map((z) => Number(z.minTotalCylinders || 0))
+    ...zones.map((z) => Number(z.requiredCylinderCount || 0)),
   );
 
-  const bulkEligible = true;
-  opts.bulkTubesEligible = bulkEligible;
+  const totalN2 = zones.reduce(
+    (s, z) => s + (Number(z.nitrogenRequiredScf) || 0),
+    0,
+  );
+  opts.isBulkTubesEligible = totalN2 > 10000;
 
-  const bulkSelected = !!opts.bulkTubes;
+  const bulkSelected = !!opts.usesBulkTubes;
   const zonesUsed = zones;
 
-  const totalPanelQty = zonesUsed.reduce((s, z) => {
-    const ps = z.panelSizing as { qty: number } | undefined;
-    return s + (ps?.qty ?? 0);
-  }, 0);
+  const totalPanelQty = zonesUsed.reduce(
+    (s, z) => s + (z.panelSizing?.qty ?? 0),
+    0,
+  );
+
+  if (opts.kind === "engineered") {
+    opts.primariesPlan = buildPrimariesPlanFromZones(zonesUsed, {
+      bulkSelected: !!opts.usesBulkTubes,
+      maxBankSize: 24,
+    });
+  }
 
   const primaryReleaseAssembliesComputed =
-    estimatePrimaryReleaseAssembliesFromZones(
-      zonesUsed,
-      bulkSelected ? 0 : maxCylAcrossZones
-    );
+    opts.primariesPlan?.primariesUsed ?? (bulkSelected ? 0 : 0);
   const adjacentRackHoseComputed = estimateAdjacentRackHosesFromZones(
-    bulkSelected ? 0 : maxCylAcrossZones
+    bulkSelected ? 0 : maxCylAcrossZones,
   );
   const doubleStackedRackHoseComputed = estimateDoubleStackedRackHoseFromZones(
-    bulkSelected ? 0 : maxCylAcrossZones
+    bulkSelected ? 0 : maxCylAcrossZones,
   );
   const batteryBackupsComputed = Math.ceil((totalPanelQty || 0) / 2);
 
@@ -1047,25 +1209,29 @@ function calcSystem_TotalFloodNFPA(
   const primaryReleaseAssemblies = persistEditable(
     prevEst.primaryReleaseAssemblies,
     bulkSelected ? 0 : primaryReleaseAssembliesComputed,
-    useUserFor(sys, "primaryReleaseAssemblies")
+    useUserFor(sys, "primaryReleaseAssemblies"),
   );
   const adjacentRackHose = persistEditable(
     prevEst.adjacentRackHose,
     bulkSelected ? 0 : adjacentRackHoseComputed,
-    useUserFor(sys, "adjacentRackHose")
+    useUserFor(sys, "adjacentRackHose"),
   );
   const doubleStackedRackHose = persistEditable(
     prevEst.doubleStackedRackHose,
     bulkSelected ? 0 : doubleStackedRackHoseComputed,
-    useUserFor(sys, "doubleStackedRackHose")
+    useUserFor(sys, "doubleStackedRackHose"),
   );
   const batteryBackups = persistEditable(
     prevEst.batteryBackups,
     batteryBackupsComputed,
-    useUserFor(sys, "batteryBackups")
+    useUserFor(sys, "batteryBackups"),
   );
 
-  const waterTankPresent = !!opts.waterTank;
+  const waterTankPresent = !!opts.selectedWaterTankPartCode; // use code presence as proxy for now, or cert?
+  // Actually, usage below implies we just need to know if a tank is part of the system for FACP counts.
+  // In app-model, waterTankCertification is always set (default ASME/FM).
+  // But selectedWaterTankPartCode is undefined if not required.
+  // Let's use selectedWaterTankPartCode.
   const facp = estimateFacpTotalsFromDesign({
     sys,
     zonesUsed,
@@ -1078,12 +1244,12 @@ function calcSystem_TotalFloodNFPA(
   const releasePoints = persistEditable(
     prevEst.releasePoints,
     facp.releasing,
-    useUserFor(sys, "releasePoints")
+    useUserFor(sys, "releasePoints"),
   );
   const monitorPoints = persistEditable(
     prevEst.monitorPoints,
     facp.supervisory + facp.alarm,
-    useUserFor(sys, "monitorPoints")
+    useUserFor(sys, "monitorPoints"),
   );
 
   opts.estimates = {
@@ -1112,14 +1278,14 @@ function calcSystem_TotalFloodNFPA(
   };
 
   for (const z of zonesUsed) {
-    const cyl = Math.max(0, Number(z.minTotalCylinders || 0));
+    const cyl = Math.max(0, Number(z.requiredCylinderCount || 0));
     if (cyl > nums.cylMax) {
       nums.cylMax = cyl;
       nums.cylZoneId = z.id;
     }
 
-    const n2Req = Math.max(0, Number(z.totalNitrogenRequired_scf || 0));
-    const n2Del = Math.max(0, Number(z.totalNitrogenDelivered_scf || 0));
+    const n2Req = Math.max(0, Number(z.nitrogenRequiredScf || 0));
+    const n2Del = Math.max(0, Number(z.nitrogenDeliveredScf || 0));
 
     if (n2Req > nums.n2ReqMax) {
       nums.n2ReqMax = n2Req;
@@ -1135,10 +1301,10 @@ function calcSystem_TotalFloodNFPA(
     nums.n2DelMax = Math.max(nums.n2DelMax, n2Del);
 
     const ps = z.panelSizing as { qty?: number } | undefined;
-    nums.panelsSum += Math.max(0, Number(ps?.qty || 0));
-    nums.flowSum += Math.max(0, Number(z.q_n2_peak_scfm || 0));
+    nums.panelsSum += Math.max(0, z.panelSizing?.qty ?? 0);
+    nums.flowSum += Math.max(0, Number(z.peakNitrogenFlowRateScfm || 0));
 
-    const tank = Math.max(0, Number(z.waterTankMin_gal || 0));
+    const tank = Math.max(0, Number(z.minWaterTankCapacityGal || 0));
     if (tank > nums.waterTankMax) {
       nums.waterTankMax = tank;
       nums.waterTankZoneId = z.id;
@@ -1146,7 +1312,7 @@ function calcSystem_TotalFloodNFPA(
 
     nums.waterReqMax = Math.max(
       nums.waterReqMax,
-      Math.max(0, Number(z.waterDischarge_gal || 0))
+      Math.max(0, Number(z.waterDischargeVolumeGal || 0)),
     );
   }
 
@@ -1154,26 +1320,33 @@ function calcSystem_TotalFloodNFPA(
     governingNitrogenZoneId: nums.n2ZoneId,
     governingWaterZoneId: nums.waterTankZoneId,
 
-    totalCylinders: bulkSelected ? nums.tubeMax : nums.cylMax,
-    totalBulkTubes: bulkSelected ? nums.tubeMax : 0,
+    systemCylinderCount: bulkSelected ? nums.tubeMax : nums.cylMax,
 
-    totalNitrogenRequired_scf: Math.round(nums.n2ReqMax),
-    totalNitrogenDelivered_scf: Math.round(nums.n2DelMax),
-    dischargePanels_qty: nums.panelsSum,
-    waterTankRequired_gal: Math.ceil(nums.waterTankMax),
-    waterRequirement_gal: round2(nums.waterReqMax),
+    nitrogenRequiredScf: Math.round(nums.n2ReqMax),
+    nitrogenDeliveredScf: Math.round(nums.n2DelMax),
+    dischargePanelCount: nums.panelsSum,
+    requiredWaterTankCapacityGal: Math.ceil(nums.waterTankMax),
+    waterRequirementGal: round2(nums.waterReqMax),
 
-    estReleasePoints: Number(opts.estimates?.releasePoints || 0),
-    estMonitorPoints: Number(opts.estimates?.monitorPoints || 0),
-    estBatteryBackups: Number(opts.estimates?.batteryBackups || 0),
+    estimatedReleasePoints: Number(opts.estimates?.releasePoints || 0),
+    estimatedMonitorPoints: Number(opts.estimates?.monitorPoints || 0),
+    estimatedBatteryBackups: Number(opts.estimates?.batteryBackups || 0),
   };
 
   return { ...sys, zones: zonesUsed, options: opts, systemTotals };
 }
 
-/** ─────────────────────────────────────────────────────────────
- *  PUBLIC API
- *  ────────────────────────────────────────────────────────────*/
+/* -------------------------------------------------------------------------- */
+/*                                PUBLIC API                                  */
+/* -------------------------------------------------------------------------- */
+/**
+ * Main entry point for Engineered System calculations.
+ * Processes all engineered systems in the project, performing zone calculations,
+ * water tank selection, and estimating parts (panels, batteries, etc.).
+ *
+ * @param p - The full Project model.
+ * @returns Updated project with calculation results and a list of validation messages.
+ */
 export function calculateEngineered(p: Project): {
   project: Project;
   messages: StatusInput[];
@@ -1182,7 +1355,7 @@ export function calculateEngineered(p: Project): {
   const systems = p.systems.map((sys) =>
     sys.type === "engineered"
       ? calcSystem_TotalFloodNFPA(p, sys, messages)
-      : sys
+      : sys,
   );
   return { project: { ...p, systems }, messages };
 }

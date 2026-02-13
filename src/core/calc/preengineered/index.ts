@@ -1,4 +1,3 @@
-// src/core/calc/preengineered/index.ts
 import {
   Project,
   System,
@@ -11,24 +10,24 @@ import {
 } from "@/state/app-model";
 
 import {
-  selectWaterTankStrict,
-  maxCapacityForCert,
-  prettyCert,
-} from "@/core/catalog/water_tanks.catalog";
-
-import {
   buildPreEngSystemPartcodeFromConfig,
   parseSystemPartcode,
 } from "@/core/calc/preengineered/partcode";
 import { resolveEmitterSpec } from "@/core/catalog/emitter.catalog";
-
-import type { Codes } from "@/core/catalog/parts.constants";
+import {
+  selectWaterTankStrict,
+  maxCapacityForCert,
+  prettyCert,
+} from "@/core/catalog/water_tanks.catalog";
 import { statusFromCode } from "@/core/status/error-codes";
 
-/** ─────────────────────────────────────────────────────────────
- *  OVERVIEW (Pre-Engineered)
- *  ─────────────────────────────────────────────────────────────
- *  This module is a pure calculator (no DOM). It mirrors legacy rules:
+import type { Codes } from "@/core/catalog/parts.constants";
+
+/* -------------------------------------------------------------------------- */
+/*                                  OVERVIEW                                  */
+/* -------------------------------------------------------------------------- */
+/**
+ * This module is a pure calculator (no DOM). It mirrors legacy rules:
  *   • Start with 49L, fallback to 80L if (EUR/GBP) or (O₂ > 14.1%) or (>4×49L)
  *   • O₂ rounded to one decimal
  *   • Target times: 3.0 min (NFPA 770 A/C & B) and 3.5 min (FM DC)
@@ -36,17 +35,25 @@ import { statusFromCode } from "@/core/status/error-codes";
  *   • ACF derived from elevation label (e.g. "0FT/0KM")
  *   • FM DC spacing & height checks produce messages
  *
- *  Flow:
- *   calculatePreEngineered(project)
+ * Flow:
+ * calculatePreEngineered(project)
  *     → calcSystem(project, system)
  *       → calcZone(project, system, zone)
  *         → calcEnclosure(project, system, zone, enclosure)
  *       → systemTotals + system-level water tank selection
  */
 
-// ─────────────────────────────────────────────────────────────
-// PUBLIC API
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                                PUBLIC API                                  */
+/* -------------------------------------------------------------------------- */
+/**
+ * Main entry point for Pre-Engineered System calculations.
+ * Processes all pre-engineered systems, validating partcodes, calculating
+ * enclosure requirements, and selecting cylinders/nozzles.
+ *
+ * @param p - The full Project model.
+ * @returns Updated project with calculation results and validation messages.
+ */
 export function calculatePreEngineered(p: Project): {
   project: Project;
   messages: StatusInput[];
@@ -54,7 +61,7 @@ export function calculatePreEngineered(p: Project): {
   const messages: StatusInput[] = [];
 
   const systems = p.systems.map((sys) =>
-    sys.type === "preengineered" ? calcSystem(p, sys, messages) : sys
+    sys.type === "preengineered" ? calcSystem(p, sys, messages) : sys,
   );
 
   return { project: { ...p, systems }, messages };
@@ -65,13 +72,14 @@ export function asPreEngineeredOptions(sys: System): PreEngineeredOptions {
   }
   return sys.options;
 }
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                             SYSTEM CALCULATION                             */
+/* -------------------------------------------------------------------------- */
 /** SYSTEM WALKER + SYSTEM TOTALS + WATER TANK PICK (STRICT) */
-// ─────────────────────────────────────────────────────────────
 function calcSystem(
   project: Project,
   sys: System,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): System {
   if (sys.options.kind !== "preengineered") return sys;
 
@@ -84,91 +92,88 @@ function calcSystem(
   //    - If invalid, push a status error and DO NOT coerce/pad the code.
   //    - We do *not* currently back-fill the config from the code; config is
   //      assumed to already match that code.
-  if (prev.systemPartCodeLocked && prev.systemPartCode) {
-    const parsed = parseSystemPartcode(prev.systemPartCode);
+  // if (prev.systemPartCodeLocked && prev.systemPartCode) {
+  //   const parsed = parseSystemPartcode(prev.systemPartCode);
 
-    // Narrow to the error case first
-    if (parsed.ok === false) {
-      const { reason, digit } = parsed;
+  //   // Narrow to the error case first
+  //   if (parsed.ok === false) {
+  //     const { reason, digit } = parsed;
 
-      if (reason === "digit") {
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            {
-              message: `Invalid pre-engineered system partcode at digit [${digit}]. Check the digit value(s), then try again.`,
-            }
-          )
-        );
-      } else if (reason === "conflict") {
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            {
-              message: `Invalid pre-engineered system partcode due to conflicting values at digit(s) [${digit}].`,
-            }
-          )
-        );
-      } else if (reason === "length") {
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            {
-              message: `Invalid pre-engineered system partcode length. Expected 15 digits but received ${digit}.`,
-            }
-          )
-        );
-      } else if (reason === "empty") {
-        messages.push(
-          statusFromCode(
-            "SYS.INVALID_PARTCODE",
-            { systemId: sys.id },
-            {
-              message:
-                "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
-            }
-          )
-        );
-      }
+  //     if (reason === "digit") {
+  //       messages.push(
+  //         statusFromCode(
+  //           "SYS.INVALID_PARTCODE",
+  //           { systemId: sys.id },
+  //           {
+  //             message: `Invalid pre-engineered system partcode at digit [${digit}]. Check the digit value(s), then try again.`,
+  //           },
+  //         ),
+  //       );
+  //     } else if (reason === "conflict") {
+  //       messages.push(
+  //         statusFromCode(
+  //           "SYS.INVALID_PARTCODE",
+  //           { systemId: sys.id },
+  //           {
+  //             message: `Invalid pre-engineered system partcode due to conflicting values at digit(s) [${digit}].`,
+  //           },
+  //         ),
+  //       );
+  //     } else if (reason === "length") {
+  //       messages.push(
+  //         statusFromCode(
+  //           "SYS.INVALID_PARTCODE",
+  //           { systemId: sys.id },
+  //           {
+  //             message: `Invalid pre-engineered system partcode length. Expected 15 digits but received ${digit}.`,
+  //           },
+  //         ),
+  //       );
+  //     } else if (reason === "empty") {
+  //       messages.push(
+  //         statusFromCode(
+  //           "SYS.INVALID_PARTCODE",
+  //           { systemId: sys.id },
+  //           {
+  //             message:
+  //               "System partcode is empty. Enter a valid 15-character pre-engineered system code.",
+  //           },
+  //         ),
+  //       );
+  //     }
 
-      // keep the user-entered string so they can see what was wrong
-      optsAny.systemPartCode = prev.systemPartCode;
-    } else {
-      if (optsAny.waterTankPick?.cert) {
-        optsAny.waterTankCertification = optsAny.waterTankPick.cert;
-      }
-      const { prePatch, zonePatch, enclosurePatch, formatted } = parsed.decoded;
+  //     // keep the user-entered string so they can see what was wrong
+  //     optsAny.systemPartCode = prev.systemPartCode;
+  //   } else {
+  //     const { prePatch, zonePatch, enclosurePatch, formatted } = parsed.decoded;
 
-      optsAny = {
-        ...optsAny,
-        ...prePatch, // <- includes waterTankPick
-        systemPartCode: formatted, // <- normalized display
-      };
+  //     optsAny = {
+  //       ...optsAny,
+  //       ...prePatch, // <- includes waterTankPick
+  //       systemPartCode: formatted, // <- normalized display
+  //     };
 
-      // Patch first zone + first enclosure for calc pass
-      const patchedZones = sys.zones.map((z, zi) => {
-        if (zi !== 0) return z;
-        return {
-          ...z,
-          ...zonePatch,
-          enclosures: z.enclosures?.map((e, ei) =>
-            ei !== 0 ? e : { ...e, ...enclosurePatch }
-          ),
-        };
-      });
+  //     // Patch first zone + first enclosure for calc pass
+  //     const patchedZones = sys.zones.map((z, zi) => {
+  //       if (zi !== 0) return z;
+  //       return {
+  //         ...z,
+  //         ...zonePatch,
+  //         enclosures: z.enclosures?.map((e, ei) =>
+  //           ei !== 0 ? e : { ...e, ...enclosurePatch },
+  //         ),
+  //       };
+  //     });
 
-      sysForCalc = { ...sys, options: optsAny, zones: patchedZones } as System;
-    }
-  } else {
-    sysForCalc = { ...sys, options: optsAny } as System;
-  }
+  //     sysForCalc = { ...sys, options: optsAny, zones: patchedZones } as System;
+  //   }
+  // } else {
+  //   sysForCalc = { ...sys, options: optsAny } as System;
+  // }
 
   // 1) Zones
   const zones = sysForCalc.zones.map((z) =>
-    calcZone(project, sysForCalc, z, messages)
+    calcZone(project, sysForCalc, z, messages),
   );
 
   // 2) Estimates
@@ -192,13 +197,13 @@ function calcSystem(
     }
 
     // Optional: keep required_gal undefined/null so UI/BOM can show "—"
-    optsAny.waterTankRequired_gal = null;
+    optsAny.requiredWaterTankCapacityGal = null;
 
-    // Also do NOT overwrite optsAny.waterTankPick here.
+    // Also do NOT overwrite optsAny.selectedWaterTankPartCode here.
   } else {
     // Normal sizing mode (existing behavior)
     const zoneNeeds = zones
-      .map((z: any) => Number(z.waterTankMin_gal) || 0)
+      .map((z: any) => Number(z.minWaterTankCapacityGal) || 0)
       .filter((g) => g > 0);
     const maxReqGal = zoneNeeds.length ? Math.max(...zoneNeeds) : 0;
 
@@ -206,7 +211,7 @@ function calcSystem(
       project.currency === "USD" ? "ASME/FM" : "CE";
     const cert: WaterTankCert = optsAny.waterTankCertification ?? defaultCert;
 
-    optsAny.waterTankRequired_gal = maxReqGal;
+    optsAny.requiredWaterTankCapacityGal = maxReqGal;
     optsAny.waterTankCertification = cert;
 
     let pickCodes: Codes | null = null;
@@ -227,15 +232,40 @@ function calcSystem(
               reqGal: Math.ceil(maxReqGal),
               certPretty: prettyCert(cert),
               maxGal: Math.ceil(maxAvail),
-            }
-          )
+            },
+          ),
         );
       }
     }
 
-    optsAny.waterTankPick = pickCodes
-      ? { codes: pickCodes, description: pickDesc, cert }
-      : null;
+    if (maxReqGal > 0) {
+      const chosen = selectWaterTankStrict(cert, maxReqGal);
+      if (chosen) {
+        optsAny.selectedWaterTankPartCode = chosen.codes as Codes; // Codes tuple (typed)
+        optsAny.selectedWaterTankPartDesc = chosen.description;
+        optsAny.waterTankCertification = chosen.cert;
+      } else {
+        const maxAvail = maxCapacityForCert(cert);
+        messages.push(
+          statusFromCode(
+            "SYS.TANK_CAPACITY",
+            { systemId: sys.id },
+            {
+              reqGal: Math.ceil(maxReqGal),
+              certPretty: prettyCert(cert),
+              maxGal: Math.ceil(maxAvail),
+            },
+          ),
+        );
+        optsAny.selectedWaterTankPartCode = null;
+        optsAny.selectedWaterTankPartDesc = null;
+        optsAny.waterTankCertification = null;
+      }
+    } else {
+      optsAny.selectedWaterTankPartCode = null;
+      optsAny.selectedWaterTankPartDesc = null;
+      optsAny.waterTankCertification = null;
+    }
   }
 
   // 4) Totals MUST use the same system object that has patched options
@@ -261,7 +291,7 @@ function buildPreSystemTotals(project: Project, sys: System, zones: Zone[]) {
   const z = zones[0];
   // Enc #0 holds the derived numbers we expose
   const waterTankRequired_gal =
-    z?.waterTankMin_gal != null ? Math.ceil(z.waterTankMin_gal) : null;
+    z?.minWaterTankCapacityGal != null ? Math.ceil(z.minWaterTankCapacityGal) : null;
 
   // Estimates copied from options (already persisted above)
   const est = (sys.options as PreEngineeredOptions).estimates || {};
@@ -278,36 +308,37 @@ function buildPreSystemTotals(project: Project, sys: System, zones: Zone[]) {
     // pre-eng fields you show:
     governingNitrogenZoneId: z?.id ?? null,
     governingWaterZoneId: z?.id ?? null,
-    totalCylinders: z?.minTotalCylinders ?? 0,
-    waterTankRequired_gal,
-    waterRequirement_gal: z?.waterDischarge_gal ?? null,
-    waterTankPick: (sys.options as any).waterTankPick ?? null,
+    systemCylinderCount: z?.requiredCylinderCount ?? 0,
+    requiredWaterTankCapacityGal: waterTankRequired_gal,
+    waterRequirementGal: z?.waterDischargeVolumeGal ?? null,
+    selectedWaterTankPartCode: (sys.options as any).selectedWaterTankPartCode ?? null,
 
-    estReleasePoints,
-    estMonitorPoints,
+    estimatedReleasePoints: estReleasePoints,
+    estimatedMonitorPoints: estMonitorPoints,
   } as any;
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                              ZONE WALKER                                   */
+/* -------------------------------------------------------------------------- */
 /** ZONE WALKER: sums cylinders/water across enclosure(s) */
-// ─────────────────────────────────────────────────────────────
 function calcZone(
   project: Project,
   sys: System,
   zone: Zone,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): Zone {
   const enclosures = zone.enclosures.map((e) =>
-    calcEnclosure(project, sys, zone, e, messages)
+    calcEnclosure(project, sys, zone, e, messages),
   );
 
   // Cyl count = sum of enclosure cylinderCount
   const opts = sys.options as PreEngineeredOptions;
 
-  const sumCyl = enclosures.reduce((s, e) => s + (e.cylinderCount ?? 0), 0);
+  const sumCyl = enclosures.reduce((s, e) => s + (e.requiredCylinderCount ?? 0), 0);
 
   const minTotalCylinders = opts.systemPartCodeLocked
-    ? (zone.overrideCylinders ?? sumCyl)
+    ? (zone.customCylinderCount ?? sumCyl)
     : sumCyl;
 
   const totalNitrogenRequired_scf = formatNitrogen(enclosures);
@@ -315,11 +346,11 @@ function calcZone(
   // Peak enclosure water GPM, and total discharged gal (sum across encs)
   const water_peak_gpm = Math.max(
     0,
-    ...enclosures.map((e: any) => Number(e.qWaterTotal_gpm) || 0)
+    ...enclosures.map((e: any) => Number(e.totalWaterFlowRateGpm) || 0),
   );
   const waterDischarge_gal = enclosures.reduce(
-    (s, e: any) => s + (Number(e.estWater_gal) || 0),
-    0
+    (s, e: any) => s + (Number(e.estimatedWaterVolumeGal) || 0),
+    0,
   );
 
   // Minimum tank (no pipe volume here): discharged water × 1.2
@@ -328,23 +359,24 @@ function calcZone(
   return {
     ...zone,
     enclosures,
-    minTotalCylinders,
-    totalNitrogenRequired_scf,
-    water_peak_gpm,
-    waterDischarge_gal,
-    waterTankMin_gal,
+    requiredCylinderCount: minTotalCylinders,
+    nitrogenRequiredScf: totalNitrogenRequired_scf,
+    peakWaterFlowRateGpm: water_peak_gpm,
+    waterDischargeVolumeGal: waterDischarge_gal,
+    minWaterTankCapacityGal: waterTankMin_gal,
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                            ENCLOSURE CALCULATION                           */
+/* -------------------------------------------------------------------------- */
 /** ENCLOSURE CALC: volume → cylinders → emitters/time → checks → water */
-// ─────────────────────────────────────────────────────────────
 function calcEnclosure(
   project: Project,
   sys: System,
   zone: Zone,
   enc: Enclosure,
-  messages: StatusInput[]
+  messages: StatusInput[],
 ): Enclosure {
   const sid = sys.id,
     zid = zone.id,
@@ -356,7 +388,7 @@ function calcEnclosure(
   const volFt3 = deriveVolumeFt3(enc, project.units);
 
   // 2) Expected time by method (NFPA 3.0, FM DC 3.5)
-  const tExpected = getExpectedTime(enc.method);
+  const tExpected = getExpectedTime(enc.designMethod);
 
   // 3) Locked mode: treat decoded partcode as law (no sizing from volume/temp)
   let chosen: {
@@ -385,15 +417,15 @@ function calcEnclosure(
 
     // Cylinder count comes from zone override (preferred) else existing enc.cylinderCount
     const count =
-      (zone.overrideCylinders ?? null) != null
-        ? Number(zone.overrideCylinders)
-        : Number(enc.cylinderCount ?? 0);
+      (zone.customCylinderCount ?? null) != null
+        ? Number(zone.customCylinderCount)
+        : Number(enc.requiredCylinderCount ?? 0);
 
     const safeCount = Number.isFinite(count) && count > 0 ? count : 0;
 
     // O2 is not encoded in partcode; we can still compute it for display,
     // but it must NOT affect selection.
-    const T = toKelvin(enc.tempF, project.units);
+    const T = toKelvin(enc.temperatureF, project.units);
     const acf = calcACF(project.elevation, project.units);
     const o2 = calcOxygen(enc, project, safeCount, cylSpec.w_cyl, volFt3, acf);
 
@@ -414,24 +446,19 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
       // fall back to old selection logic so the UI doesn't crash
       bundle = getMethodBundlesForEnclosure(enc)[0] ?? BUNDLES[0];
     } else {
       bundle = picked;
-      if (bundle.op_psi == 25) {
-        pushNote(enc, "Panel Pressure Setting: 32 psi.");
-      } else if (bundle.op_psi == 50) {
-        pushNote(enc, "Panel Pressure Setting: 55 psi.");
-      }
     }
 
     // Emitters count comes from decoded override
     const overrideEmitters =
-      (enc.customMinEmitters ?? null) != null
-        ? Number(enc.customMinEmitters)
-        : Number(enc.minEmitters ?? 0);
+      (enc.customNozzleCount ?? null) != null
+        ? Number(enc.customNozzleCount)
+        : Number(enc.requiredNozzleCount ?? 0);
 
     emitters =
       Number.isFinite(overrideEmitters) && overrideEmitters > 0
@@ -443,17 +470,10 @@ function calcEnclosure(
   } else {
     // 3) Normal sizing mode (existing behavior)
     chosen = pickCylinders(project, enc, volFt3, cyl49, {
-      minForFM49L: enc.method === "FM Data Centers" ? 2 : 1,
+      minForFM49L: enc.designMethod === "FM Data Centers" ? 2 : 1,
     });
 
-    const currency = project.currency;
-    if (
-      chosen.size === "49L" &&
-      (chosen.o2 > 14.1 ||
-        chosen.count > 4 ||
-        currency === "EUR" ||
-        currency === "GBP")
-    ) {
+    if (chosen.size === "49L" && (chosen.o2 > 14.1 || chosen.count > 4)) {
       chosen = pickCylinders(project, enc, volFt3, cyl80);
 
       if (chosen.count > 8) {
@@ -462,7 +482,7 @@ function calcEnclosure(
             systemId: sid,
             zoneId: zid,
             enclosureId: eid,
-          })
+          }),
         );
       }
       if (chosen.o2 > 14.1) {
@@ -471,7 +491,7 @@ function calcEnclosure(
             systemId: sid,
             zoneId: zid,
             enclosureId: eid,
-          })
+          }),
         );
       }
     }
@@ -482,8 +502,8 @@ function calcEnclosure(
         statusFromCode(
           "ENC.TIME_CONSTRAINT",
           { systemId: sid, zoneId: zid, enclosureId: eid },
-          { method: enc.method }
-        )
+          { method: enc.designMethod },
+        ),
       );
     }
 
@@ -491,20 +511,25 @@ function calcEnclosure(
     emitters = solved.emitters;
     tActual = solved.tActualMin;
   }
+  if (bundle.op_psi == 25) {
+    pushNote(enc, "Panel Pressure Setting: 32 psi.");
+  } else if (bundle.op_psi == 50) {
+    pushNote(enc, "Panel Pressure Setting: 55 psi.");
+  }
 
-  if (enc.emitterStyle && !bundle.allowedStyles.includes(enc.emitterStyle)) {
+  if (enc.nozzleOrientation && !bundle.allowedStyles.includes(enc.nozzleOrientation)) {
     messages.push(
       statusFromCode("ENC.NOZZLE_STYLE", {
         systemId: sid,
         zoneId: zid,
         enclosureId: eid,
         field: "nozzleStyle",
-      })
+      }),
     );
   }
 
   // FM DC checks: height & spacing
-  if (enc.method === "FM Data Centers") {
+  if (enc.designMethod === "FM Data Centers") {
     const heightFt = toFeet(enc.height ?? 0, project.units);
     const heightLimit = bundle.sizeLabel === '5/8"' ? 24.5 : 16;
     if (heightFt > heightLimit) {
@@ -513,14 +538,14 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
     }
     const spacingOk = checkFMSpacing(
       enc,
       emitters,
       bundle.sizeLabel,
-      project.units
+      project.units,
     );
     if (!spacingOk) {
       messages.push(
@@ -528,7 +553,7 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
     }
   }
@@ -541,7 +566,7 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
     } else if (chosen.o2 < 10 && chosen.o2 >= 8) {
       messages.push(
@@ -549,7 +574,7 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
     } else if (chosen.o2 < 8) {
       messages.push(
@@ -557,17 +582,17 @@ function calcEnclosure(
           systemId: sid,
           zoneId: zid,
           enclosureId: eid,
-        })
+        }),
       );
     }
   }
   // 5) N2 requirement and water math for display
   const qN2Req = calcReqNitrogenFlow(
     volFt3,
-    enc.tempF,
+    enc.temperatureF,
     project.units,
     project.elevation,
-    tExpected
+    tExpected,
   );
   const perEmitterGpm = bundle.q_water;
   const totalGpm = perEmitterGpm * emitters;
@@ -585,16 +610,16 @@ function calcEnclosure(
 
   return {
     ...enc,
-    volume: project.units === "imperial" ? volFt3 : volFt3 / 35.3147,
-    minEmitters: emitters,
-    cylinderCount: chosen.count,
-    estDischarge: formatMinutes(tActual),
-    estFinalO2: `${chosen.o2.toFixed(1)} %`,
+    volumeFt3: project.units === "imperial" ? volFt3 : volFt3 / 35.3147,
+    requiredNozzleCount: emitters,
+    requiredCylinderCount: chosen.count,
+    estimatedDischargeDuration: formatMinutes(tActual),
+    estimatedFinalOxygenPercent: `${chosen.o2.toFixed(1)} %`,
 
     // Water numbers for collector
-    qWater_gpm: perEmitterGpm,
-    qWaterTotal_gpm: totalGpm,
-    estWater_gal: totalWaterGal,
+    waterFlowRateGpm: perEmitterGpm,
+    totalWaterFlowRateGpm: totalGpm,
+    estimatedWaterVolumeGal: totalWaterGal,
 
     // Extras used elsewhere
     _qN2Req: qN2Req,
@@ -602,31 +627,28 @@ function calcEnclosure(
     _emitterBundle: bundle.label,
 
     // Cylinder “surface” fields
-    _cylinderLabel: cylinderLabel,
+    cylinderLabel: cylinderLabel,
     _cylinderSize: cylinderSize,
     _cylinderFillPSI: cylinderFillPressure,
   } as Enclosure;
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                              DOMAIN HELPERS                                */
+/* -------------------------------------------------------------------------- */
 /** DOMAIN HELPERS: units, expected times, cylinders, O₂, ACF */
-// ─────────────────────────────────────────────────────────────
 function deriveVolumeFt3(enc: Enclosure, units: Units): number {
-  if (enc.length && enc.width && enc.height) {
-    const L = toFeet(enc.length, units);
-    const W = toFeet(enc.width, units);
-    const H = toFeet(enc.height, units);
-    return Math.max(0, L * W * H);
-  }
-  // fallback: assume enc.volume in displayed units
-  return units === "imperial" ? enc.volume : (enc.volume ?? 0) * 35.3147;
+  const v = enc.volumeFt3 ?? 0;
+  // If units are metric, v is in m3, so we convert m3 to ft3.
+  // If units are imperial, v is already in ft3.
+  return units === "imperial" ? v : v * 35.3147;
 }
 
 function toFeet(value: number, units: Units): number {
   return units === "imperial" ? value : value * 3.28084;
 }
 
-function getExpectedTime(method: Enclosure["method"]): number {
+function getExpectedTime(method: Enclosure["designMethod"]): number {
   return method === "FM Data Centers" ? 3.5 : 3.0;
 }
 
@@ -639,7 +661,7 @@ type CylinderSpec = {
 
 function getCylinderSpec(
   size: "49L" | "80L",
-  fillPressure: PreEngineeredOptions["fillPressure"]
+  fillPressure: PreEngineeredOptions["fillPressure"],
 ): CylinderSpec {
   if (size === "49L") {
     return { size, w_cyl: 275, w_usable: 244, label: "49L @ 2400 psi" };
@@ -657,7 +679,7 @@ function pickCylinders(
   enc: Enclosure,
   volFt3: number,
   spec: CylinderSpec,
-  opts?: { minForFM49L?: number }
+  opts?: { minForFM49L?: number },
 ): {
   size: CylinderSpec["size"];
   count: number;
@@ -667,13 +689,13 @@ function pickCylinders(
   w_usable: number;
 } {
   const T0 = 294.4;
-  const T = toKelvin(enc.tempF, project.units);
+  const T = toKelvin(enc.temperatureF, project.units);
   const acf = calcACF(project.elevation, project.units);
 
   // legacy target O₂ ≈ 14%
   const targetO2 = 14.0;
   const n = Math.ceil(
-    Math.log(targetO2 / 20.95) * -((volFt3 * acf * T0) / (spec.w_cyl * T))
+    Math.log(targetO2 / 20.95) * -((volFt3 * acf * T0) / (spec.w_cyl * T)),
   );
   let count = Math.max(0, n);
 
@@ -704,19 +726,20 @@ function calcOxygen(
   nCyl: number,
   w_cyl: number,
   volFt3: number,
-  acf: number
+  acf: number,
 ): number {
   const T0 = 294.4;
-  const T = toKelvin(enc.tempF, project.units);
+  const T = toKelvin(enc.temperatureF, project.units);
   const val = 20.95 * Math.exp(-((nCyl * w_cyl) / (volFt3 * acf)) * (T / T0));
   return Math.round(val * 10) / 10; // 1-decimal rounding
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                              EMITTER BUNDLES                               */
+/* -------------------------------------------------------------------------- */
 /** EMITTER BUNDLES + REQUIRED N₂ FLOW (lb/min) */
-// ─────────────────────────────────────────────────────────────
 type Bundle = {
-  method: Enclosure["method"];
+  method: Enclosure["designMethod"];
   sizeLabel: '3/8"' | '1/2"' | '5/8"';
   foil: "Cavity" | "Dome";
   op_psi: 25 | 50;
@@ -856,7 +879,7 @@ function calcReqNitrogenFlow(
   tempF: number,
   units: Units,
   elevation: string,
-  tExpectedMin: number
+  tExpectedMin: number,
 ): number {
   const T0 = 294.4;
   const T = toKelvin(tempF, units);
@@ -880,9 +903,10 @@ function formatNitrogen(encs: Enclosure[]): number {
   return sum;
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                       ALTITUDE CORRECTION (ACF)                            */
+/* -------------------------------------------------------------------------- */
 /** ACF (Altitude Correction Factor) & elevation parsing */
-// ─────────────────────────────────────────────────────────────
 const ACF_TABLE = [
   { ft: -3000, acf: 1.11 },
   { ft: -2000, acf: 1.07 },
@@ -935,14 +959,15 @@ export function calcACF(elevationLabel: string, units: Units): number {
   return best.acf;
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                             FM DATA CENTERS                                */
+/* -------------------------------------------------------------------------- */
 /** FM DATA CENTERS: simplified spacing/height rules */
-// ─────────────────────────────────────────────────────────────
 function checkFMSpacing(
   enc: Enclosure,
   nEmitters: number,
   sizeLabel: '5/8"' | '3/8"' | '1/2"',
-  units: Units
+  units: Units,
 ): boolean {
   const L = toFeet(enc.length ?? 0, units);
   const W = toFeet(enc.width ?? 0, units);
@@ -986,9 +1011,10 @@ function checkFMSpacing(
   return true;
 }
 
-// ─────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/*                              EMITTER SOLVER                                */
+/* -------------------------------------------------------------------------- */
 /** EMITTER SOLVER: choose bundle & integer emitter count to meet time windows */
-// ─────────────────────────────────────────────────────────────
 type SolveOk = {
   ok: true;
   bundle: Bundle;
@@ -1005,9 +1031,9 @@ type SolveFail = {
 };
 
 function solveForBundle(
-  method: Enclosure["method"],
+  method: Enclosure["designMethod"],
   bundle: Bundle,
-  totalUsableLb: number
+  totalUsableLb: number,
 ): SolveOk | SolveFail {
   const tExp = getExpectedTime(method);
   const q = bundle.q_n2;
@@ -1060,10 +1086,10 @@ function solveForBundle(
 }
 
 function getMethodBundlesForEnclosure(enc: Enclosure): Bundle[] {
-  const all = BUNDLES.filter((b) => b.method === enc.method);
+  const all = BUNDLES.filter((b) => b.method === enc.designMethod);
 
   // If nozzle code implies size, pre-filter (e.g., "...58..." → 5/8")
-  const code = (enc.nozzleCode || "").toLowerCase();
+  const code = (enc.nozzleModel || "").toLowerCase();
   const preferSize: Bundle["sizeLabel"] | undefined = code.includes("58")
     ? '5/8"'
     : code.includes("12")
@@ -1073,21 +1099,21 @@ function getMethodBundlesForEnclosure(enc: Enclosure): Bundle[] {
         : undefined;
 
   let list = preferSize ? all.filter((b) => b.sizeLabel === preferSize) : all;
-  if (enc.emitterStyle)
-    list = list.filter((b) => b.allowedStyles.includes(enc.emitterStyle!));
+  if (enc.nozzleOrientation)
+    list = list.filter((b) => b.allowedStyles.includes(enc.nozzleOrientation!));
   return list;
 }
 
 function solveEmitters(
   enc: Enclosure,
-  chosen: { count: number; w_usable: number }
+  chosen: { count: number; w_usable: number },
 ): SolveOk | SolveFail {
   const totalUsable = chosen.count * chosen.w_usable;
   const candidates = getMethodBundlesForEnclosure(enc);
 
   let bestMiss: SolveFail | null = null;
   for (const b of candidates) {
-    const res = solveForBundle(enc.method, b, totalUsable);
+    const res = solveForBundle(enc.designMethod, b, totalUsable);
     if (res.ok) return res;
     if ("gap" in res)
       bestMiss = !bestMiss || res.gap < bestMiss.gap ? res : bestMiss;
@@ -1104,12 +1130,12 @@ function solveEmitters(
   );
 }
 function pickBundleFromNozzle(enc: Enclosure): Bundle | null {
-  if (!enc.nozzleCode || !enc.emitterStyle) return null;
+  if (!enc.nozzleModel || !enc.nozzleOrientation) return null;
 
   const spec = resolveEmitterSpec(
-    enc.method as any,
-    enc.nozzleCode as any,
-    enc.emitterStyle as any
+    enc.designMethod as any,
+    enc.nozzleModel as any,
+    enc.nozzleOrientation as any,
   );
   if (!spec) return null;
 
@@ -1117,10 +1143,10 @@ function pickBundleFromNozzle(enc: Enclosure): Bundle | null {
   // (These are the most stable keys you have in this module.)
   const candidates = BUNDLES.filter(
     (b) =>
-      b.method === enc.method &&
+      b.method === enc.designMethod &&
       b.q_n2 === spec.q_n2 &&
       b.q_water === spec.q_water &&
-      b.allowedStyles.includes(enc.emitterStyle as any)
+      b.allowedStyles.includes(enc.nozzleOrientation as any),
   );
 
   return candidates[0] ?? null;

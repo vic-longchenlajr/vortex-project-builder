@@ -1,6 +1,9 @@
 // src/core/status/errorCodes.ts
 import type { Severity } from "@/state/app-model";
 
+/* -------------------------------------------------------------------------- */
+/*                                    TYPES                                   */
+/* -------------------------------------------------------------------------- */
 export type ErrorCode =
   | "PROJ.MISSING_FIELDS"
   | "SYS.MISSING_NAME"
@@ -12,7 +15,7 @@ export type ErrorCode =
   | "SYS.TANK_CAPACITY"
   | "SYS.INVALID_PARTCODE"
   | "SYS.BULK_TUBES_EXCLUDED"
-  | "SYS.RUNDOWN_TIME_UNUSED"
+  | "ZONE.RUNDOWN_TIME_UNUSED"
   | "ZONE.MISSING_NAME"
   | "ZONE.INVALID_CHARS"
   | "ZONE.NO_ENCLOSURES"
@@ -59,8 +62,11 @@ export type ErrorDoc = {
   resolution: string;
 };
 
+/* -------------------------------------------------------------------------- */
+/*                           ERROR CODE DEFINITIONS                           */
+/* -------------------------------------------------------------------------- */
 export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
-  // ---------- Project ----------
+  /* --------------------------------- Project -------------------------------- */
   "PROJ.MISSING_FIELDS": {
     severity: "error",
     title: "Missing required project fields",
@@ -71,7 +77,7 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
     resolution: "Fill in all required project fields, then validate again.",
   },
 
-  // ---------- System ----------
+  /* --------------------------------- System --------------------------------- */
   "SYS.MISSING_NAME": {
     severity: "error",
     title: "System name is empty",
@@ -142,7 +148,7 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
       "The user-entered pre-engineered system partcode does not match the required format or allowed digit values.",
     message: (p) => p?.message ?? "Invalid pre-engineered system partcode",
     resolution:
-      "Verify the system partcode against the pre-engineered catalog rules or unlock the field and let the configurator generate a code.",
+      "Verify the system partcode against the pre-engineered catalog rules or unlock the field and let the builder generate a code.",
   },
   "SYS.BULK_TUBES_EXCLUDED": {
     severity: "warn",
@@ -155,7 +161,7 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
     resolution:
       "Download and complete the Bulk Tube Order Form (SF-37) and submit it separately for pricing and ordering.",
   },
-  "SYS.RUNDOWN_TIME_UNUSED": {
+  "ZONE.RUNDOWN_TIME_UNUSED": {
     severity: "warn",
     title:
       "Rundown time is only in effect for FM Machine Spaces/Turbines design methods.",
@@ -168,7 +174,7 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
     resolution:
       "Either change at least one enclosure to FM Machine Spaces/Turbines or set Rundown Time to 0.",
   },
-  // ---------- Zone ----------
+  /* ---------------------------------- Zone ---------------------------------- */
   "ZONE.MISSING_NAME": {
     severity: "error",
     title: "Zone name is empty",
@@ -276,7 +282,7 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
   //   resolution: "Select a bulk tube size/capacity, then recalculate.",
   // },
 
-  // ---------- Enclosure ----------
+  /* ------------------------------- Enclosure -------------------------------- */
   "ENC.MISSING_NAME": {
     severity: "error",
     title: "Enclosure name is empty",
@@ -495,14 +501,26 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
   },
 };
 
-// Build a stable anchor id that matches the Guide's <tr id=...>
+/* -------------------------------------------------------------------------- */
+/*                                   HELPERS                                  */
+/* -------------------------------------------------------------------------- */
+/**
+ * Build a stable anchor id that matches the Guide's <tr id=...>
+ */
 export const codeAnchorId = (code: ErrorCode) =>
   `err-${code.replace(/\./g, "-")}`;
 
-// Build a full link to the Guide section
+/**
+ * Build a full link to the Guide section
+ */
 export const codeHref = (code: ErrorCode) => `/guide#${codeAnchorId(code)}`;
 
-// Helper to create a StatusMessage from a code + params
+/**
+ * Create a validated status message object from an error code.
+ * @param code - The error code to lookup.
+ * @param ctx - Context identifiers (systemId, etc.) for navigation.
+ * @param params - Dynamic values for the error message string.
+ */
 export function statusFromCode(
   code: ErrorCode,
   ctx: Partial<{
@@ -511,7 +529,7 @@ export function statusFromCode(
     enclosureId: string;
     field: string;
   }> = {},
-  params: Record<string, any> = {}
+  params: Record<string, any> = {},
 ) {
   const def = ERROR_CODES[code];
   return {

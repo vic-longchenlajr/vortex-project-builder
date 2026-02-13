@@ -12,10 +12,10 @@ export function syncPointsFromBOM(project: Project): Project {
     if (!block) return sys;
 
     const opts = sys.options as EngineeredOptions;
-    if (opts.editValues) return sys; // user overrides win
+    if (opts.isEstimateEditingEnabled) return sys; // user overrides win
 
     const releasePoints = block.totals.releasing; // 24V releasing circuits
-    const monitorPoints = block.totals.supervisory + block.totals.alarm; // “monitor” = sup + alarm
+    const monitorPoints = block.totals.supervisory + block.totals.alarmPoints; // "monitor" = sup + alarm
 
     const nextEst = {
       ...opts.estimates,

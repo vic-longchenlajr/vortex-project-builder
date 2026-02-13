@@ -5,7 +5,7 @@ export default function TutorialRedirect(): JSX.Element | null {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/configurator?tutorial=1&mode=temp");
+    router.replace("/builder?tutorial=1&mode=temp");
   }, [router]);
 
   return null;

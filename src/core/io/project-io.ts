@@ -1,6 +1,6 @@
 // src/core/io/project-io.ts
 /**
- * Export / Import helpers for the configurator.
+ * Export / Import helpers for the builder.
  * - Versioned snapshot for forward-compat
  * - Small schema guardrails
  * - File download/upload helpers
@@ -10,7 +10,7 @@ export type SnapshotV1 = {
   __kind: "victaulic-vortex-config";
   version: 1;
   exportedAt: string; // ISO
-  app: { name: "Configurator"; build?: string };
+  app: { name: "Builder"; build?: string };
   project: any; // your full project state (safe to keep as `any` here)
 };
 
@@ -21,7 +21,7 @@ export function makeSnapshotV1(project: any): SnapshotV1 {
     __kind: "victaulic-vortex-config",
     version: 1,
     exportedAt: new Date().toISOString(),
-    app: { name: "Configurator" },
+    app: { name: "Builder" },
     project,
   };
 }
@@ -32,7 +32,7 @@ export function isSnapshotV1(x: any): x is SnapshotV1 {
     x.__kind === "victaulic-vortex-config" &&
     x.version === 1 &&
     typeof x.exportedAt === "string" &&
-    x.app?.name === "Configurator" &&
+    x.app?.name === "Builder" &&
     typeof x.project !== "undefined"
   );
 }

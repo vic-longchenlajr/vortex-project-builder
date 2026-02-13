@@ -29,14 +29,14 @@ export default function Home() {
               </h1>
 
               <p className={styles.heroSub}>
-                A unified configurator for engineered and pre-engineered
+                A unified project builder for engineered and pre-engineered
                 Victaulic Vortex™ systems, built around approved design
-                methodologies and validation rules.
+                methodologies and validation rules.Ad
               </p>
 
               <div className={styles.ctaRow}>
-                <Link href="/configurator" className={styles.btnPrimary}>
-                  Open Configurator
+                <Link href="/builder" className={styles.btnPrimary}>
+                  Open Builder
                 </Link>
                 <a href="#learn-more" className={styles.btnGhost}>
                   Learn More
@@ -106,7 +106,7 @@ export default function Home() {
           <div className={styles.split}>
             <div className={styles.splitCol}>
               <p>
-                The Victaulic Vortex Configurator supports engineered and
+                The Victaulic Vortex Project Builder supports engineered and
                 pre-engineered systems within a single, structured design
                 environment. Systems are organized by zone and enclosure, with
                 calculations and constraints driven by the selected design
@@ -114,8 +114,8 @@ export default function Home() {
               </p>
 
               <p>
-                Throughout the configuration process, the configurator applies
-                design guardrails that reflect applicable standards and approval
+                Throughout the configuration process, the builder applies design
+                guardrails that reflect applicable standards and approval
                 requirements. Validation is applied at the project, system,
                 zone, and enclosure levels to help identify incompatible
                 configurations and performance limitations before designs are

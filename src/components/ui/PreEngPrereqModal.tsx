@@ -1,6 +1,7 @@
 import React from "react";
 import cn from "clsx";
-import styles from "@/styles/preengprereqmodal.module.css";
+
+import styles from "@/styles/PreEngPrereqModal.module.css";
 
 const STORAGE_KEY = "vv_pe_prereq_ack_v1";
 
@@ -28,6 +29,9 @@ export function shouldShowPreEngPrereq(): boolean {
   return !ls.getItem(STORAGE_KEY);
 }
 
+/* -------------------------------------------------------------------------- */
+/*                          PRE-ENG PREREQ MODAL                              */
+/* -------------------------------------------------------------------------- */
 export default function PreEngPrereqModal({
   open,
   onCancel,

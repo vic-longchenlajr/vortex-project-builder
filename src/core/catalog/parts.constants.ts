@@ -18,7 +18,7 @@ export const __pilot_primary_80L: Codes = pc("S0009500PP", "D09500000VXPPK0");
 export const __pilot_secondary_80L: Codes = pc("S0009500SP", "D09500000VX00SP");
 export const __pilot_secondary_80L_p: Codes = pc(
   "S000950PSP",
-  "D09500000VXSPPG"
+  "D09500000VXSPPG",
 );
 export const __pilot_primary_49L: Codes = pc("S4909500PP", "D095000000VX4P0");
 export const __pilot_secondary_49L: Codes = pc("S4909500SP", "D095000049VX4S0");
@@ -85,7 +85,7 @@ export const __flow_cartridge_423: Codes = pc("K000953423", "K09530006VXWCB3");
 
 export const __tamper_resistance_kit: Codes = pc(
   "K000950WTR",
-  "K09500000VXWTRR"
+  "K09500000VXWTRR",
 );
 
 // add-ons
@@ -143,12 +143,21 @@ export const __backup_bat_220: Codes = pc("S000950220", "D09500220VX0BDC");
 export const __tank_regulator_nor: Codes = pc("P000950065", "D09500002VX00RM");
 export const __tank_regulator_hc: Codes = pc("S000950HCW", "D09500004VXHAWT");
 
-// cylinders
+// filled cylinders
 export const __80L_cylinder_n2: Codes = pc("S000950A01", "D09500000VXS000");
 export const __49L_cylinder_n2: Codes = pc("S000950A02", "D09500000VXSC0A");
+export const __80L_cylinder_n2_eu: Codes = pc(
+  "D09550000VX82FR",
+  "D09550000VX82FR",
+);
+// unfilled cylinders
 export const __80L_cylinder_n2_unfilled: Codes = pc(
   "S000950E01",
-  "D09500000VX8CE0"
+  "D09500000VX8CE0",
+);
+export const __49L_cylinder_n2_unfilled: Codes = pc(
+  "D09500000VXSS4E",
+  "D09500000VXSS4E",
 );
 
 // panel options
@@ -166,7 +175,7 @@ export const __panel2_zdc: Codes = pc("S02095110A", "D09510020VX3DCZ");
 export const __threaded_ball_valve: Codes = pc("V010728CT0", "V07280010DP3B00");
 export const __12_low_pressure_n2_switch: Codes = pc(
   "S000760044",
-  "D07600000EASPSD"
+  "D07600000EASPSD",
 );
 
 // manifold assemblies

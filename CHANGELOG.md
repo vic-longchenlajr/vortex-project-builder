@@ -2,15 +2,32 @@
 _v2.1.2_
 Universal Updates
 
+- Added tutorial on first access or tutorial version update
+- Added global disclaimer for manual descrepancies
+- Added victaulic.com to global nav
+- Clicking status code links to guide lookup
+- Clicking status message links to scroll to/highlight effected system/zone/enclosure
+- Updated wording throughout landing page and guide to standardize
+- BOM Formatting + Added Primaries page
+- Updated project shape / variable names
+
 Engineered System Updates
 
+- Consolidated FM machine spaces + turbines to a single method
+- Fixed rounding for FM Data Centers calculations
+- Bulk Tubes notification in status console
+- Added low discharge time warning for NFPA
+- Updated Primaries calculations 
+
 Pre-Engineered System Updates
+
+- Cut wording for pre-engineered system disclaimer
 
 _v2.1.1_
 Universal Updates
 
 - Standardized on rounding to ensure lean and accurately displayed results.
-- Refined configurator ergonomics (sticky headers, improved scroll behavior, reduced layout friction)
+- Refined builder ergonomics (sticky headers, improved scroll behavior, reduced layout friction)
 - Moved function buttons to a center header that is visible on all screens.
 - Emitter consolidation updates
 - Added 1/2 brass emitter to FMT and FMMS
@@ -38,7 +55,7 @@ _v2.1.0_
 Universal Updates
 
 - Sorted nozzle display by descreasing orifice size and operating pressure
-- Refined status panel wording and centralized location of all error/warning codes throughout the guide and configurator.
+- Refined status panel wording and centralized location of all error/warning codes throughout the guide and builder.
 
 Engineered System Updates
 
@@ -128,7 +145,7 @@ _v1.1.1_
 
 Universal Updates
 
-- Added FM required labels to both configurators
+- Added FM required labels to both builders
 
 Engineered Updates
 
@@ -150,7 +167,7 @@ Universal Updates
 
 Pre-Engineered Updates
 
-- First live version with pre-engineered configurator included.
+- First live version with pre-engineered builder included.
 - Consolidated cylinders
 - Unit Change
 
@@ -192,7 +209,7 @@ Pre-Engineered Updates
 
 - Added emitter size @ operating pressure selection menu for FM Data Centers
 
-- Updated spacing requirement tables in generated bill of material and on the configurator
+- Updated spacing requirement tables in generated bill of material and on the builder
 
 Engineered Updates
 
@@ -206,9 +223,9 @@ _v1.0.5_
 
 Pre-Engineered Updates
 
-- Added warning disclosure on configurator screen and Vortex System
+- Added warning disclosure on builder screen and Vortex System
 
-- Increased height of status bar to reduce the need to scroll
+- Increased height of status console to reduce the need to scroll
 
 - Removed unapproved water tank certifications
 
@@ -224,7 +241,7 @@ Pre-Engineered Updates
 
 - Added fill pressure next to cylinder selection
 
-- Removed PVDF emitters from configurator
+- Removed PVDF emitters from builder
 
 - Added Example Volume Calculations Page
 
@@ -298,7 +315,7 @@ _v1.0.0_
 
 - First version available for public usage
 
-- Only contains engineered configurator (preengineered located at /preengineered)
+- Only contains engineered builder (preengineered located at /preengineered)
 
 - Email functionality removed
 
@@ -315,7 +332,7 @@ _v0.2.3_
 
 - 2/29/2024
 
-- Added HELP.md: Document about how to navigate and make changes to the configurator.
+- Added HELP.md: Document about how to navigate and make changes to the builder.
 
 - Updated Calculator
   - Added manifold plugs, cylinder refill adapter options, 1” emitter (FM DC)
@@ -386,7 +403,7 @@ _v0.2.0_
 
 - Added toggle edit button for Emitter and Cylinder quantities for NFPA 770 design methods. Feature implemented and tested (not extensively)
 
-- Added status bar error checking for discharge time and O2 levels when edit quantities are selected.
+- Added status console error checking for discharge time and O2 levels when edit quantities are selected.
 
 --
 

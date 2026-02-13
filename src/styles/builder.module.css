@@ -1,5 +1,5 @@
 /* =========================================================
-   src/styles/configurator.module.css
+   src/styles/builder.module.css
    - Single source of truth for typography, spacing, tables, inputs, cards
    - Other modules (like systemoptionspanel.module.css) should ONLY consume tokens
    ========================================================= */
@@ -299,7 +299,13 @@
   color: var(--ink-2);
   font-size: var(--fs-12);
 }
-
+.rowHeading {
+  font-size: var(--fs-12);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-1);
+  margin-bottom: 6px;
+}
 /* =========================================================
    SHARED CONTROLS (inputs/selects/buttons)
    ========================================================= */
@@ -371,7 +377,7 @@
 }
 .inputNumXs {
   composes: inputNum;
-  width: 56px;
+  width: 60px;
 }
 
 /* =========================================================
@@ -539,24 +545,124 @@
   background: var(--surface);
   box-sizing: border-box;
 }
+/* Cylinder supply radio group (compact, token-aligned) */
+.cylFieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.cylOptions {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+/* Each label acts like a pill button */
+.cylOptionLabel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  row-gap: 2px;
+  align-items: start;
+  font-size: var(--fs-13);
+  color: var(--ink-3);
+  cursor: pointer;
+  line-height: var(--lh-tight);
+}
+
+/* radio itself */
+.cylOptionLabel input[type="radio"] {
+  margin-top: 2px; /* aligns with first text line */
+  accent-color: var(--brand-accent);
+}
+
+/* Accessibility: focus ring */
+.cylOptionLabel input[type="radio"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 105, 0, 0.18);
+  border-color: var(--brand-accent);
+}
+
+.cylHelp {
+  margin-top: 6px;
+  font-size: var(--fs-12);
+  color: var(--ink-1);
+  line-height: 1.35;
+}
+.cylSub {
+  font-size: var(--fs-12);
+  color: var(--ink-2);
+}
+
+/* Make radios wrap on very narrow widths */
+@media (max-width: 520px) {
+  .cylOptions {
+    flex-direction: column;
+  }
+  .cylOptionLabel {
+    width: 100%;
+  }
+}
 
 /* =========================================================
    PRICING PANEL (right)
    ========================================================= */
-.priceCard {
-  flex: 0 0 auto;
+/* PRICING PANEL (compact stacking) */
+.priceStack {
+  display: grid;
+  gap: 10px; /* keeps it tight */
+  margin-top: 6px;
 }
-.priceTitle {
-  margin: 0 0 6px 0;
-  font-size: var(--fs-16);
+
+.priceBlock {
+  padding-top: 2px;
 }
-.priceRow {
+
+.priceBlockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.priceBlockTitle {
+  font-size: var(--fs-12);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.priceBlockMult {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* tighter rows than your default .priceRow */
+.priceRowTight {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 2px;
 }
-.priceValue {
+
+.priceDivider {
+  height: 1px;
+  background: var(--line-2);
+  margin: 10px 0 8px;
+}
+
+.priceProjectLabel {
   font-weight: 700;
+}
+.priceBlockTitle[data-type="pre"] {
+  color: var(--sys-pre);
+}
+
+.priceBlockTitle[data-type="eng"] {
+  color: var(--sys-eng);
 }
 
 /* =========================================================
@@ -953,6 +1059,22 @@
   background: var(--surface);
   border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 12px;
+}
+
+.fieldBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fieldBlock label {
+  font-size: var(--fs-12);
+  color: var(--ink-2);
 }
 
 /* =========================================================

@@ -71,7 +71,7 @@ function parseSolvedBundleLabel(label?: string): {
  * You can call this from the calculator after solving.
  */
 export function buildGuidanceFromSolution(params: {
-  method: Enclosure["method"];
+  method: Enclosure["designMethod"];
   size: SizeLabel;
   opPsi: 25 | 50;
   emitters: number;
@@ -153,9 +153,9 @@ export function computePreEngGuidance(
   // Determine size (prefer solved; else infer from nozzle code; else 3/8")
   const inferredSize: SizeLabel =
     (solved.size as SizeLabel) ||
-    ((enc.nozzleCode?.includes("5/8") || enc.nozzleCode?.includes("58")) &&
+    ((enc.nozzleModel?.includes("5/8") || enc.nozzleModel?.includes("58")) &&
       '5/8"') ||
-    ((enc.nozzleCode?.includes("1/2") || enc.nozzleCode?.includes("12")) &&
+    ((enc.nozzleModel?.includes("1/2") || enc.nozzleModel?.includes("12")) &&
       '1/2"') ||
     '3/8"';
 
@@ -163,12 +163,12 @@ export function computePreEngGuidance(
   const opPsi: 25 | 50 = solved.opPsi ?? 50;
 
   // Use the solved emitter count when available
-  const emitters = Number.isFinite(enc.minEmitters as any)
-    ? (enc.minEmitters as number)
+  const emitters = Number.isFinite(enc.requiredNozzleCount as any)
+    ? (enc.requiredNozzleCount as number)
     : 1;
 
   return buildGuidanceFromSolution({
-    method: enc.method,
+    method: enc.designMethod,
     size: inferredSize,
     opPsi,
     emitters,

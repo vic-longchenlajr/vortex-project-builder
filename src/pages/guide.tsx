@@ -33,7 +33,7 @@ export default function Guide() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta
           name="description"
-          content="How to use the Victaulic Vortex™ Project Configurator: features & functionality, Project workbook breakdown, design methods, and FAQ."
+          content="How to use the Victaulic Vortex™ Project Builder: features & functionality, Project workbook breakdown, design methods, and FAQ."
         />
       </Head>
 
@@ -42,26 +42,26 @@ export default function Guide() {
       <div className={styles.body}>
         {/* ───────── TABLE OF CONTENTS ───────── */}
         <section className={`${styles.section} ${styles.dark}`}>
-          <h1 className={styles.sectionHeading}>Configurator Guide</h1>
+          <h1 className={styles.sectionHeading}>Builder Guide</h1>
           <p>
-            This guide explains how the Victaulic Vortex™ Project Configurator
-            is structured and how to interpret its results. It describes how
+            This guide explains how the Victaulic Vortex™ Project Builder is
+            structured and how to interpret its results. It describes how
             projects, systems, zones, and enclosures are organized; outlines
             design method differences; and explains validation messages and
             calculated outputs.
           </p>
           <p>
-            For step-by-step interaction with the interface, use the
-            in-configurator tutorial.
+            For step-by-step interaction with the interface, use the in-builder
+            tutorial.
           </p>
           {/* Unified Navigator */}
           <nav aria-label="Guide navigation" className={styles.guideNav}>
             {/* Primary CTA */}
             <Link
-              href="/configurator"
+              href="/builder"
               className={`${styles.navCard} ${styles.navCardPrimary}`}
             >
-              <div className={styles.navCardTitle}>Open Configurator</div>
+              <div className={styles.navCardTitle}>Open Builder</div>
               <div className={styles.navCardDesc}>
                 Start a new project or continue where you left off.
               </div>
@@ -572,8 +572,8 @@ export default function Guide() {
                   system?
                 </summary>
                 <div className={styles.faqBody}>
-                  The configurator iterates through all of the zone calculations
-                  to determine the zone with the highest required quantity of
+                  The builder iterates through all of the zone calculations to
+                  determine the zone with the highest required quantity of
                   nitrogen and the zone with the highest required quantity of
                   water. The system storage is then sized to meet the
                   requirements of these zones.
@@ -591,9 +591,9 @@ export default function Guide() {
                   Use <em>Save</em> to download a JSON file containing all
                   project inputs and results. This file can be shared (e.g., via
                   email) and restored using <em>Load</em>. Note that saved
-                  projects always capture the configurator's current state —
-                  even if errors are present — to help with troubleshooting or
-                  support review.
+                  projects always capture the builder's current state — even if
+                  errors are present — to help with troubleshooting or support
+                  review.
                 </div>
               </details>
 

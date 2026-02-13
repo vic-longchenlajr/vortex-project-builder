@@ -1,5 +1,5 @@
 {
-  "name": "vortex-project-configurator",
+  "name": "vortex-project-builder",
   "version": "2.1.2",
   "private": true,
   "scripts": {
@@ -30,7 +30,7 @@
     "react-dom": "18.2.0",
     "react-joyride": "^2.9.3"
   },
-  "description": "Victaulic Vortex Project Configurator",
+  "description": "Victaulic Vortex Project Builder",
   "main": ".desktop-dist/main.js",
   "author": "Victaulic Co. of America",
   "license": "ISC",

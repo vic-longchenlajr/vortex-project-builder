@@ -1,5 +1,9 @@
 import React, { createContext, useContext } from "react";
 
+/* -------------------------------------------------------------------------- */
+/*                                 UI FLAGS                                   */
+/* -------------------------------------------------------------------------- */
+
 type UIFlags = { disclaimerOpen: boolean };
 const UIFlagsContext = createContext<UIFlags>({ disclaimerOpen: false });
 
