@@ -1,6 +1,6 @@
 // src/core/bom/pricelist.localloader.ts
 
-const LOCAL_PRICE_LIST_PATH = "/database/victaulic-vortex-pricelist.xlsx";
+const LOCAL_PRICE_LIST_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/database/victaulic-vortex-pricelist.xlsx`;
 
 /**
  * Load the Vortex price list from the locally bundled database.
