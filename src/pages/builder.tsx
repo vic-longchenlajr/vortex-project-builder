@@ -292,7 +292,7 @@ export default function BuilderPage() {
       <Head>
         <title>Victaulic Vortex™ | Builder</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href="/vx.ico" sizes="any" />
+        <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`} sizes="any" />
       </Head>{" "}
       <div className={navStyles.navSpacer} />
       <Scaffold />
@@ -371,7 +371,7 @@ function Scaffold() {
    */
   const loadTutorialProject = React.useCallback(async () => {
     const res = await fetch(
-      "/tutorial/VortexProject_Tutorial_Project_v2_1_2.json",
+      `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/tutorial/VortexProject_Tutorial_Project_v2_1_2.json`,
       {
         cache: "no-store",
       },
@@ -2063,7 +2063,7 @@ function EmitterImagePanel({ zone }: { zone: any }) {
   }
 
   // Images live in /public; filenames are "1.png", "2.png", ...
-  const src = `/img/nozzles/${emitters}.png`;
+  const src = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/img/nozzles/${emitters}.png`;
   const alt = `${emitters} nozzle${emitters === 1 ? "" : "s"} layout preview`;
 
   return (

@@ -29,7 +29,7 @@ export default function Guide() {
     <>
       <Head>
         <title>Victaulic Vortex™ | Guide</title>
-        <link rel="icon" href="/vx.ico" sizes="any" />
+        <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`} sizes="any" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta
           name="description"

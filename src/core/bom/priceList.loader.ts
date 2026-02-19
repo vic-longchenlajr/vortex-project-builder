@@ -26,7 +26,7 @@ export async function loadPriceListBytes(url?: string): Promise<Uint8Array> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return new Uint8Array(await res.arrayBuffer());
   }
-  const resp = await fetch("/database/victaulic-vortex-pricelist-2025.xlsx");
+  const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/database/victaulic-vortex-pricelist-2025.xlsx`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return new Uint8Array(await resp.arrayBuffer());
 }

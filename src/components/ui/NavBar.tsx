@@ -71,7 +71,7 @@ export default function NavBar() {
       <div className={styles.navLogo}>
         <Link href="/" aria-label="Go to Home">
           <Image
-            src="/img/assets/Vortex-Logo-Black.png"
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/img/assets/Vortex-Logo-Black.png`}
             alt="Victaulic Vortex Logo"
             width={384 * 1.8}
             height={49.5 * 1.8}

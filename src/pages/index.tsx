@@ -11,7 +11,7 @@ export default function Home() {
       <Head>
         <title>Victaulic Vortex™ | Home</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href="/vx.ico" sizes="any" />
+        <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`} sizes="any" />
       </Head>
 
       <Navbar />
@@ -46,7 +46,7 @@ export default function Home() {
 
             <div className={styles.heroImageWrap} aria-hidden>
               <Image
-                src="/img/assets/cylinders.png"
+                src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/img/assets/cylinders.png`}
                 alt=""
                 fill
                 priority
