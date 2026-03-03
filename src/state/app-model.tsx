@@ -216,11 +216,13 @@ export type EngineeredEstimates = {
   releasePoints: number;
   monitorPoints: number;
   batteryBackups: number;
+  refillAdapters: number;
 };
 
 export type PreEstimates = {
   releasePoints: number;
   monitorPoints: number;
+  refillAdapters: number;
 };
 
 export type PanelStyle = "ar" | "dc";
@@ -384,6 +386,7 @@ export function makeEngineeredOptions(): EngineeredOptions {
       releasePoints: 0,
       monitorPoints: 0,
       batteryBackups: 0,
+      refillAdapters: 0,
     },
 
     requiredWaterTankCapacityGal: 0,
@@ -412,6 +415,7 @@ export function makePreOptions(): PreEngineeredOptions {
     estimates: {
       releasePoints: 0,
       monitorPoints: 0,
+      refillAdapters: 0,
     },
 
     requiredWaterTankCapacityGal: 0,
@@ -446,7 +450,10 @@ function makeDefaultPreEnclosure(idx = 1): Enclosure {
   return {
     id: newId("enc"),
     name: `Enclosure ${idx}`,
-    volumeFt3: 1000,
+    length: 10,
+    width: 10,
+    height: 10,
+    volumeFt3: 0,
     temperatureF: 70,
     designMethod: method,
     nozzleModel: nozzle,
@@ -786,25 +793,48 @@ function validateProject(project: Project): StatusMessage[] {
             });
           }
         }
-        if (!enc.volumeFt3 || enc.volumeFt3 <= 0) {
-          msgs.push({
-            id: id(),
-            ...statusFromCode("ENC.VOLUME_EMPTY", {
-              systemId: sys.id,
-              zoneId: zone.id,
-              enclosureId: enc.id,
-              field: "volumeFt3",
-            }),
-          });
+        const isPreEng = sys.type === "preengineered";
+        if (isPreEng) {
+          // Pre-engineered: volume is derived from L × W × H
+          const L = enc.length ?? 0;
+          const W = enc.width ?? 0;
+          const H = enc.height ?? 0;
+          if (L <= 0 || W <= 0 || H <= 0) {
+            msgs.push({
+              id: id(),
+              ...statusFromCode("ENC.VOLUME_EMPTY", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+                field: "length",
+              }),
+            });
+          }
+        } else {
+          // Engineered: direct volume entry
+          if (!enc.volumeFt3 || enc.volumeFt3 <= 0) {
+            msgs.push({
+              id: id(),
+              ...statusFromCode("ENC.VOLUME_EMPTY", {
+                systemId: sys.id,
+                zoneId: zone.id,
+                enclosureId: enc.id,
+                field: "volumeFt3",
+              }),
+            });
+          }
         }
 
-        // FM-specific volume caps
+        // FM-specific volume caps (compute volume from dimensions for pre-eng)
+        const encVolume = isPreEng
+          ? (enc.length ?? 0) * (enc.width ?? 0) * (enc.height ?? 0)
+          : (enc.volumeFt3 || 0);
         if (enc.designMethod === "FM Data Centers") {
           const maxFt3 = 31350;
           const maxM3 = 2912.5;
           const exceeds =
-            (project.units === "imperial" && (enc.volumeFt3 || 0) > maxFt3) ||
-            (project.units === "metric" && (enc.volumeFt3 || 0) > maxM3);
+            (project.units === "imperial" && encVolume > maxFt3) ||
+            (project.units === "metric" && encVolume > maxM3);
           if (exceeds) {
             msgs.push({
               id: id(),
@@ -821,8 +851,8 @@ function validateProject(project: Project): StatusMessage[] {
           const maxFt3 = 127525;
           const maxM3 = 3611.1;
           const exceeds =
-            (project.units === "imperial" && (enc.volumeFt3 || 0) > maxFt3) ||
-            (project.units === "metric" && (enc.volumeFt3 || 0) > maxM3);
+            (project.units === "imperial" && encVolume > maxFt3) ||
+            (project.units === "metric" && encVolume > maxM3);
           if (exceeds) {
             msgs.push({
               id: id(),
@@ -1200,10 +1230,12 @@ export const AppModelProvider: React.FC<{ children: React.ReactNode }> = ({
       const nz: NozzleCode = pickDefaultNozzle(m);
       const st: EmitterStyleKey | undefined = coerceStyle(m, nz);
 
+      const isPreEng = sys.type === "preengineered";
       const enc: Enclosure = {
         id: newId("enc"),
         name: `Enclosure ${zone.enclosures.length + 1}`,
-        volumeFt3: 1000,
+        ...(isPreEng ? { length: 10, width: 10, height: 10 } : {}),
+        volumeFt3: isPreEng ? 0 : 1000,
         temperatureF: 70,
         designMethod: m,
         nozzleModel: nz,

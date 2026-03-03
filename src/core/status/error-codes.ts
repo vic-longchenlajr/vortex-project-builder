@@ -326,11 +326,11 @@ export const ERROR_CODES: Record<ErrorCode, ErrorDoc> = {
   },
   "ENC.VOLUME_EMPTY": {
     severity: "error",
-    title: "Volume/dimensions invalid",
+    title: "Dimensions invalid",
     appearsWhen: "On Validate",
     meaning: "Volume or dimensions are zero or missing.",
-    message: () => "Volume must be a positive, non-zero value",
-    resolution: "Enter valid length, width, and height or a positive volume.",
+    message: () => "Length, width, and height must each be positive, non-zero values",
+    resolution: "Enter valid length, width, and height values.",
   },
   "ENC.FMDC_VOLUME_LIMIT": {
     severity: "error",

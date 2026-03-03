@@ -96,7 +96,7 @@ Final system designs must be reviewed and approved in accordance with applicable
 ## 🧭 Repository Information
 
 **Repository Name:** `victaulic-vortex-project-builder`  
-**Version:** 2.1.1
+**Version:** 2.1.3
 **License:** Internal Use – Victaulic Fire Suppression Technology  
 **Maintainer:** Fire Suppression Engineering – Easton, PA
 

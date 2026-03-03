@@ -444,6 +444,24 @@ export default function Guide() {
 
                 <tr>
                   <td>
+                    <strong>&lt;Project Name&gt; – Primaries</strong>
+                  </td>
+                  <td>
+                    One sheet per project. Applies to{" "}
+                    <strong>Engineered Systems</strong> only (systems using bulk
+                    tubes or a user-overridden primary release assembly count
+                    are excluded). Lists each system&apos;s total number of
+                    primary release assemblies alongside a release group
+                    breakdown showing which cylinder banks are assigned to each
+                    group, the zones served by that group, and individual bank
+                    sizing. Use this sheet to verify primary release assembly
+                    counts and cylinder bank assignments before final design
+                    review.
+                  </td>
+                </tr>
+
+                <tr>
+                  <td>
                     <strong>FACP Monitor & Release Points</strong>
                   </td>
                   <td>

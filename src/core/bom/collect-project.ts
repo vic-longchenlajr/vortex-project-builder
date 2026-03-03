@@ -521,10 +521,11 @@ export function collectPreEngineeredBOM(
       }
     }
     //============================================REFILL ADAPTER============================================//
+    const refillQty = Math.max(0, Number(opts.estimates?.refillAdapters) || cylCount);
     if (opts.refillAdapter === "CGA-580") {
-      add(bom, __refill_cga580, cylCount, "supply", project);
+      add(bom, __refill_cga580, refillQty, "supply", project);
     } else if (opts.refillAdapter === "CGA-677") {
-      add(bom, __refill_cga677, cylCount, "supply", project);
+      add(bom, __refill_cga677, refillQty, "supply", project);
     }
     add(
       bom,
@@ -959,11 +960,11 @@ export function collectEngineeredBOM(project: Project): EngineeredBomBySystem {
     // ─────────────────────────────────────────────────────────────
 
     // Refill adapters, cylinders (system-level)
-
+    const refillQty = Math.max(0, Number(est.refillAdapters) || maxCyl);
     if (opts.refillAdapter === "CGA-580")
-      add(bom, __refill_cga580, maxCyl, "supply", project);
+      add(bom, __refill_cga580, refillQty, "supply", project);
     if (opts.refillAdapter === "CGA-677")
-      add(bom, __refill_cga677, maxCyl, "supply", project);
+      add(bom, __refill_cga677, refillQty, "supply", project);
 
     if (maxCyl > 0) {
       const cylPart = resolveCylinderSupply(project, "80L");

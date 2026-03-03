@@ -11,7 +11,11 @@ export default function Home() {
       <Head>
         <title>Victaulic Vortex™ | Home</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`} sizes="any" />
+        <link
+          rel="icon"
+          href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`}
+          sizes="any"
+        />
       </Head>
 
       <Navbar />
@@ -31,7 +35,7 @@ export default function Home() {
               <p className={styles.heroSub}>
                 A unified project builder for engineered and pre-engineered
                 Victaulic Vortex™ systems, built around approved design
-                methodologies and validation rules.Ad
+                methodologies and validation rules.
               </p>
 
               <div className={styles.ctaRow}>

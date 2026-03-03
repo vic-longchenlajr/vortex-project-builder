@@ -688,6 +688,31 @@ function EngineeredForm({
               </thead>
               <tbody>
                 <tr>
+                  <td className={styles.kvLabel}>Refill Adapters ({opts.refillAdapter ?? "CGA-580"})</td>
+                  <td className={styles.kvValue}>
+                    <span className={styles.estControls}>
+                      <input
+                        type="checkbox"
+                        checked={!!editMap.refillAdapters}
+                        onChange={(e) =>
+                          setEdit("refillAdapters", e.target.checked)
+                        }
+                        title="Enable custom value"
+                      />
+                      <input
+                        className={styles.kpiInput}
+                        type="number"
+                        min={0}
+                        value={Number(opts.estimates.refillAdapters) || 0}
+                        onChange={(e) =>
+                          setEst("refillAdapters", Number(e.target.value) || 0)
+                        }
+                        disabled={!editMap.refillAdapters}
+                      />
+                    </span>
+                  </td>
+                </tr>
+                <tr>
                   <td className={styles.kvLabel}>Primary Release Assemblies</td>
                   <td className={styles.kvValue}>
                     <span className={styles.estControls}>
@@ -932,7 +957,8 @@ function PreForm({
     updateSystemOptions(systemId, { addOns: { ...opts.addOns, ...patch } });
 
   const unitVol = project.units === "metric" ? "m³" : "ft³";
-  const vol = Number((enc as Enclosure).volumeFt3) || 0;
+  const encTyped = enc as Enclosure;
+  const vol = ((encTyped.length ?? 0) * (encTyped.width ?? 0) * (encTyped.height ?? 0)) || Number(encTyped.volumeFt3) || 0;
   const volStr = vol.toLocaleString(undefined, {
     maximumFractionDigits: project.units === "metric" ? 3 : 0,
   });

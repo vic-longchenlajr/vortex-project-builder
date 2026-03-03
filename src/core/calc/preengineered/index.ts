@@ -179,11 +179,18 @@ function calcSystem(
   // 2) Estimates
   const rp = 1;
   const mp = 9;
+  const cylCount = zones[0]?.requiredCylinderCount ?? 0;
+  const overrides = (prev.estimateOverrides ?? {}) as Record<string, boolean>;
+  const prevEst = prev.estimates || ({} as any);
+  const refillAdapters = overrides.refillAdapters
+    ? (typeof prevEst.refillAdapters === "number" ? prevEst.refillAdapters : cylCount)
+    : cylCount;
 
   optsAny.estimates = {
     ...(prev.estimates || {}),
     releasePoints: rp,
     monitorPoints: mp,
+    refillAdapters,
   };
 
   // 3) WATER TANK
@@ -638,9 +645,14 @@ function calcEnclosure(
 /* -------------------------------------------------------------------------- */
 /** DOMAIN HELPERS: units, expected times, cylinders, O₂, ACF */
 function deriveVolumeFt3(enc: Enclosure, units: Units): number {
+  const L = enc.length ?? 0;
+  const W = enc.width ?? 0;
+  const H = enc.height ?? 0;
+  if (L > 0 && W > 0 && H > 0) {
+    return toFeet(L, units) * toFeet(W, units) * toFeet(H, units);
+  }
+  // Fallback for legacy saved projects that only have volumeFt3
   const v = enc.volumeFt3 ?? 0;
-  // If units are metric, v is in m3, so we convert m3 to ft3.
-  // If units are imperial, v is already in ft3.
   return units === "imperial" ? v : v * 35.3147;
 }
 

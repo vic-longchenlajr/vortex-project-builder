@@ -292,7 +292,11 @@ export default function BuilderPage() {
       <Head>
         <title>Victaulic Vortex™ | Builder</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`} sizes="any" />
+        <link
+          rel="icon"
+          href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/vx.ico`}
+          sizes="any"
+        />
       </Head>{" "}
       <div className={navStyles.navSpacer} />
       <Scaffold />
@@ -428,7 +432,7 @@ function Scaffold() {
       if (forceTutorial) {
         try {
           window.history.replaceState({}, "", "/builder");
-        } catch { }
+        } catch {}
       }
     })().catch(console.error);
   }, [disclaimerOpen, loadTutorialProject, clearStatus, setAutosaveEnabled]);
@@ -1262,14 +1266,16 @@ function SystemCard({
   return (
     <section
       id={`sys-${sys.id}`}
-      className={`${styles.sysCard} ${isPre ? styles["sysCard--pre"] : styles["sysCard--eng"]
-        }`}
+      className={`${styles.sysCard} ${
+        isPre ? styles["sysCard--pre"] : styles["sysCard--eng"]
+      }`}
     >
       {/* Slim colored header band + system badge */}
       <div className={styles.sysHeader}>
         <span
-          className={`${styles.sysBadge} ${isPre ? styles["sysBadge--pre"] : styles["sysBadge--eng"]
-            }`}
+          className={`${styles.sysBadge} ${
+            isPre ? styles["sysBadge--pre"] : styles["sysBadge--eng"]
+          }`}
         >
           {isPre ? "Pre-Engineered" : "Engineered"}
         </span>
@@ -1396,8 +1402,6 @@ function ZoneCard({
   const tOpen = Number(zone.bulkValveOpenTimeMin);
   const tOpenDisplay = Number.isFinite(tOpen) ? tOpen : 10; // default
 
-  const unitVol = project.units === "metric" ? "m³" : "ft³";
-
   const zoneHl = highlights.zoneLevel.get(zone.id) ?? null;
   const zoneHlClass =
     zoneHl === "error"
@@ -1461,7 +1465,7 @@ function ZoneCard({
         </div>
         {/* Zone-level estimated dry water pipe volume */}
         <div className={styles.fieldBlock}>
-          <label>Est. Dry Water Pipe Vol. ({unitVol})</label>
+          <label>Est. Dry Water Pipe Vol. ({project.units === "metric" ? "L" : "gal"})</label>
           <input
             className={styles.inputMd}
             type="number"
@@ -1949,10 +1953,10 @@ function ZoneResultsTable({ sysId, zone }: { sysId: string; zone: Zone }) {
             <td className={styles.kvValue}>
               {typeof zone?.minWaterTankCapacityGal === "number"
                 ? `${Math.ceil(
-                  zone.minWaterTankCapacityGal,
-                ).toLocaleString()} gal / ${Math.ceil(
-                  (zone.minWaterTankCapacityGal || 0) * 3.78541,
-                ).toLocaleString()} L`
+                    zone.minWaterTankCapacityGal,
+                  ).toLocaleString()} gal / ${Math.ceil(
+                    (zone.minWaterTankCapacityGal || 0) * 3.78541,
+                  ).toLocaleString()} L`
                 : "—"}
             </td>
           </tr>
@@ -2052,6 +2056,18 @@ function EmitterImagePanel({ zone }: { zone: any }) {
   const raw = enc?.requiredNozzleCount ?? enc?.requiredNozzleCount;
   const emitters = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
 
+  // Images live in /public; filenames are "1.png", "2.png", ...
+  const src = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/img/nozzles/${emitters}.png`;
+
+  // Track missing-image state via React state so it resets properly when src
+  // changes. Direct DOM mutation (e.currentTarget.style.display = "none") would
+  // persist across re-renders because React only patches style properties that
+  // differ in its virtual DOM — it never reverses an imperative override.
+  const [imgError, setImgError] = React.useState(false);
+  React.useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   // Guard: if nothing calculated yet, show a helpful note
   if (!emitters || emitters < 0) {
     return (
@@ -2062,9 +2078,15 @@ function EmitterImagePanel({ zone }: { zone: any }) {
     );
   }
 
-  // Images live in /public; filenames are "1.png", "2.png", ...
-  const src = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/img/nozzles/${emitters}.png`;
   const alt = `${emitters} nozzle${emitters === 1 ? "" : "s"} layout preview`;
+
+  if (emitters > 10) {
+    return (
+      <div className={styles.muted}>
+        Layout not available for <strong>{emitters}</strong> nozzles.
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -2072,32 +2094,31 @@ function EmitterImagePanel({ zone }: { zone: any }) {
         Displaying preview for <strong>{emitters}</strong> nozzle
         {emitters === 1 ? "" : "s"}.
       </div>
-      <div
-        style={{
-          border: "1px solid #e3e6ef",
-          borderRadius: 8,
-          overflow: "hidden",
-          background: "#fff",
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={alt}
+      {!imgError && (
+        <div
           style={{
-            width: "100%",
-            height: "auto",
-            display: "block",
-            objectFit: "contain",
-            maxHeight: 360,
+            border: "1px solid #e3e6ef",
+            borderRadius: 8,
+            overflow: "hidden",
             background: "#fff",
           }}
-          onError={(e) => {
-            // Friendly fallback if an image for this count doesn't exist
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
-      </div>
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={alt}
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              objectFit: "contain",
+              maxHeight: 360,
+              background: "#fff",
+            }}
+            onError={() => setImgError(true)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -2139,21 +2160,31 @@ function PreInputTable({
   const styleOptions = enc.nozzleModel
     ? getStylesFor(method, enc.nozzleModel, { systemType: "preengineered" })
     : [];
+  const derivedVol = (enc.length ?? 0) * (enc.width ?? 0) * (enc.height ?? 0);
+  const volDisplay =
+    derivedVol > 0
+      ? derivedVol.toLocaleString(undefined, {
+          maximumFractionDigits: project.units === "metric" ? 3 : 0,
+        })
+      : "—";
+
   return (
     <div className={styles.enclosureTableWrap}>
       <table className={`${styles.enclosureTable} ${styles.preTable}`}>
         <colgroup>
           <col />
-          <col style={{ width: 104 }} />
+          <col style={{ width: 70 }} />
+          <col style={{ width: 70 }} />
           <col style={{ width: 80 }} />
           <col />
           <col style={{ width: "18%" }} />
-          <col style={{ width: "15%" }} />
+          <col style={{ width: "18%" }} />
         </colgroup>
 
         <thead>
           <tr>
             <th>Enclosure Name</th>
+            <th>Dimensions ({unitLen})</th>
             <th>Volume ({unitVol})</th>
             <th>Temp (°{unitTemp})</th>
             <th>Design Method</th>
@@ -2177,19 +2208,97 @@ function PreInputTable({
             </td>
 
             <td>
-              <input
-                type="number"
-                step={1}
-                className={styles.inputSm}
-                value={showDash ? "" : toInputValue(enc.volumeFt3)}
-                placeholder={showDash ? "—" : undefined}
-                onChange={(e) =>
-                  updateEnclosure(sysId, zone.id, enc.id, {
-                    volumeFt3: fromNumberInput(e.target.value),
-                  })
-                }
-                disabled={locked}
-              />
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  alignItems: "center",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    fontSize: "0.75em",
+                  }}
+                >
+                  <span style={{ width: 12, opacity: 0.6 }}>L</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    className={styles.inputSm}
+                    style={{ width: "60%", minWidth: 0 }}
+                    value={showDash ? "" : toInputValue(enc.length)}
+                    placeholder={showDash ? "—" : undefined}
+                    onChange={(e) =>
+                      updateEnclosure(sysId, zone.id, enc.id, {
+                        length: fromNumberInput(e.target.value),
+                      })
+                    }
+                    disabled={locked}
+                  />
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    fontSize: "0.75em",
+                  }}
+                >
+                  <span style={{ width: 12, opacity: 0.6 }}>W</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    className={styles.inputSm}
+                    style={{ width: "60%", minWidth: 0 }}
+                    value={showDash ? "" : toInputValue(enc.width)}
+                    placeholder={showDash ? "—" : undefined}
+                    onChange={(e) =>
+                      updateEnclosure(sysId, zone.id, enc.id, {
+                        width: fromNumberInput(e.target.value),
+                      })
+                    }
+                    disabled={locked}
+                  />
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    fontSize: "0.75em",
+                  }}
+                >
+                  <span style={{ width: 12, opacity: 0.6 }}>H</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    className={styles.inputSm}
+                    style={{ width: "60%", minWidth: 0 }}
+                    value={showDash ? "" : toInputValue(enc.height)}
+                    placeholder={showDash ? "—" : undefined}
+                    onChange={(e) =>
+                      updateEnclosure(sysId, zone.id, enc.id, {
+                        height: fromNumberInput(e.target.value),
+                      })
+                    }
+                    disabled={locked}
+                  />
+                </label>
+              </div>
+            </td>
+
+            <td
+              style={{
+                textAlign: "center",
+                fontWeight: 500,
+                verticalAlign: "middle",
+              }}
+            >
+              {showDash ? "—" : `${volDisplay}`}
             </td>
 
             <td>

@@ -89,8 +89,8 @@ function pipeVolumeToGallons(project: Project, v: number | undefined | null) {
   if (!Number.isFinite(x) || x <= 0) return 0;
 
   return project.units === "metric"
-    ? x * 264.172 // m³ → gal
-    : x * 7.48052; // ft³ → gal
+    ? x * 0.264172 // L → gal
+    : x; // already in gal
 }
 
 const clampInt = (n: any, min = 0) =>
@@ -832,7 +832,7 @@ function computeZoneWaterAndTank(
   );
   const zoneWaterDischarge_GAL = qWaterPeak_GPM * t_flow_zone_min;
 
-  // zone-level now (UI shows ft³/m³; pipeVolumeToGallons converts metric m³ -> gal)
+  // UI shows gal/L; pipeVolumeToGallons converts metric L -> gal
   const pipeVolGal = pipeVolumeToGallons(p, zone.pipeVolumeGal);
   const zoneTankMin_GAL = (zoneWaterDischarge_GAL + pipeVolGal) * SAFETY_FACTOR;
 
@@ -1259,6 +1259,7 @@ function calcSystem_TotalFloodNFPA(
     batteryBackups,
     releasePoints,
     monitorPoints,
+    refillAdapters: 0, // placeholder, computed after cylinder counts are known
   };
 
   // 4) System totals for UI summary (kept as-is)
@@ -1315,6 +1316,15 @@ function calcSystem_TotalFloodNFPA(
       Math.max(0, Number(z.waterDischargeVolumeGal || 0)),
     );
   }
+
+  // Refill adapters: computed from max cylinder count, overridable by user
+  const computedRefillAdapters = bulkSelected ? nums.tubeMax : nums.cylMax;
+  const refillAdapters = persistEditable(
+    prevEst.refillAdapters,
+    computedRefillAdapters,
+    useUserFor(sys, "refillAdapters" as EstKey),
+  );
+  opts.estimates = { ...opts.estimates, refillAdapters };
 
   const systemTotals = {
     governingNitrogenZoneId: nums.n2ZoneId,

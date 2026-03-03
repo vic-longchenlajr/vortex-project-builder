@@ -1,4 +1,15 @@
 **Version Control Log:**
+
+_v2.1.3_
+Engineered System Updates
+
+- Fixed Est. Dry Water Pipe Vol. field units to gallons
+- Added cylinder refill adapters as editable quantity
+
+Pre-Engineered System Updates
+
+- Converted volume field to LWH input
+
 _v2.1.2_
 Universal Updates
 
@@ -17,7 +28,7 @@ Engineered System Updates
 - Fixed rounding for FM Data Centers calculations
 - Bulk Tubes notification in status console
 - Added low discharge time warning for NFPA
-- Updated Primaries calculations 
+- Updated Primaries calculations
 
 Pre-Engineered System Updates
 
