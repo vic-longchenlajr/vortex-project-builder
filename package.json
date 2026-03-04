@@ -15,7 +15,8 @@
     "build:desktop": "tsc -p tsconfig.desktop.json",
     "start:desktop": "npm-run-all -s build:web build:desktop forge:start",
     "make:desktop": "npm-run-all -s build:web build:desktop forge:make",
-    "package:desktop": "npm-run-all -s build:web build:desktop forge:package"
+    "package:desktop": "npm-run-all -s build:web build:desktop forge:package",
+    "release": "ts-node --transpile-only --project tools/tsconfig.tools.json tools/release.ts"
   },
   "dependencies": {
     "@types/react": "18.2.14",
