@@ -27,11 +27,16 @@ import type { Codes } from "@/core/catalog/parts.constants";
 /*                                  OVERVIEW                                  */
 /* -------------------------------------------------------------------------- */
 /**
- * This module is a pure calculator (no DOM). It mirrors legacy rules:
- *   • Start with 49L, fallback to 80L if (EUR/GBP) or (O₂ > 14.1%) or (>4×49L)
- *   • O₂ rounded to one decimal
+ * This module is a pure calculator (no DOM). It follows a forward-solve flow
+ * aligned with the engineered calculator:
+ *   • Compute N₂ requirement from volume, temperature, ACF, flooding factor,
+ *     and safety factor: Qreq = V × (T_STD/T) × ACF × FF × SF
+ *   • Derive cylinder count: ceil(Qreq / cylinderCapacity)
+ *   • Start with 49L; escalate to 80L if count > 4 (physical limit)
+ *   • Derive emitter count from required flow / nozzle flow rate
+ *   • O₂ computed as display-only from provided N₂
  *   • Target times: 3.0 min (NFPA 770 A/C & B) and 3.5 min (FM DC)
- *   • Emitters: NFPA -> ceil, FM DC -> floor (via solver constraints)
+ *   • Emitters: NFPA -> ceil, FM DC -> floor
  *   • ACF derived from elevation label (e.g. "0FT/0KM")
  *   • FM DC spacing & height checks produce messages
  *
@@ -42,6 +47,14 @@ import type { Codes } from "@/core/catalog/parts.constants";
  *         → calcEnclosure(project, system, zone, enclosure)
  *       → systemTotals + system-level water tank selection
  */
+
+/* -------------------------------------------------------------------------- */
+/*                                 CONSTANTS                                  */
+/* -------------------------------------------------------------------------- */
+const T_STD_K = 294.4; // Reference absolute temperature (K)
+const FF_PREENG = 0.375; // Flooding factor for pre-engineered
+const SF_PREENG = 1.075; // Safety factor tuned to match legacy O₂-based sizing
+// FF × SF = 0.403125 ≈ ln(20.95/14) = 0.4035
 
 /* -------------------------------------------------------------------------- */
 /*                                PUBLIC API                                  */
@@ -183,7 +196,9 @@ function calcSystem(
   const overrides = (prev.estimateOverrides ?? {}) as Record<string, boolean>;
   const prevEst = prev.estimates || ({} as any);
   const refillAdapters = overrides.refillAdapters
-    ? (typeof prevEst.refillAdapters === "number" ? prevEst.refillAdapters : cylCount)
+    ? typeof prevEst.refillAdapters === "number"
+      ? prevEst.refillAdapters
+      : cylCount
     : cylCount;
 
   optsAny.estimates = {
@@ -223,28 +238,6 @@ function calcSystem(
 
     let pickCodes: Codes | null = null;
     let pickDesc: string | null = null;
-
-    if (maxReqGal > 0) {
-      const chosen = selectWaterTankStrict(cert, maxReqGal);
-      if (chosen) {
-        pickCodes = chosen.codes;
-        pickDesc = chosen.description;
-      } else {
-        const maxAvail = maxCapacityForCert(cert);
-        messages.push(
-          statusFromCode(
-            "SYS.TANK_CAPACITY",
-            { systemId: sys.id },
-            {
-              reqGal: Math.ceil(maxReqGal),
-              certPretty: prettyCert(cert),
-              maxGal: Math.ceil(maxAvail),
-            },
-          ),
-        );
-      }
-    }
-
     if (maxReqGal > 0) {
       const chosen = selectWaterTankStrict(cert, maxReqGal);
       if (chosen) {
@@ -298,7 +291,9 @@ function buildPreSystemTotals(project: Project, sys: System, zones: Zone[]) {
   const z = zones[0];
   // Enc #0 holds the derived numbers we expose
   const waterTankRequired_gal =
-    z?.minWaterTankCapacityGal != null ? Math.ceil(z.minWaterTankCapacityGal) : null;
+    z?.minWaterTankCapacityGal != null
+      ? Math.ceil(z.minWaterTankCapacityGal)
+      : null;
 
   // Estimates copied from options (already persisted above)
   const est = (sys.options as PreEngineeredOptions).estimates || {};
@@ -318,7 +313,8 @@ function buildPreSystemTotals(project: Project, sys: System, zones: Zone[]) {
     systemCylinderCount: z?.requiredCylinderCount ?? 0,
     requiredWaterTankCapacityGal: waterTankRequired_gal,
     waterRequirementGal: z?.waterDischargeVolumeGal ?? null,
-    selectedWaterTankPartCode: (sys.options as any).selectedWaterTankPartCode ?? null,
+    selectedWaterTankPartCode:
+      (sys.options as any).selectedWaterTankPartCode ?? null,
 
     estimatedReleasePoints: estReleasePoints,
     estimatedMonitorPoints: estMonitorPoints,
@@ -342,7 +338,10 @@ function calcZone(
   // Cyl count = sum of enclosure cylinderCount
   const opts = sys.options as PreEngineeredOptions;
 
-  const sumCyl = enclosures.reduce((s, e) => s + (e.requiredCylinderCount ?? 0), 0);
+  const sumCyl = enclosures.reduce(
+    (s, e) => s + (e.requiredCylinderCount ?? 0),
+    0,
+  );
 
   const minTotalCylinders = opts.systemPartCodeLocked
     ? (zone.customCylinderCount ?? sumCyl)
@@ -397,7 +396,11 @@ function calcEnclosure(
   // 2) Expected time by method (NFPA 3.0, FM DC 3.5)
   const tExpected = getExpectedTime(enc.designMethod);
 
-  // 3) Locked mode: treat decoded partcode as law (no sizing from volume/temp)
+  // 3) Shared thermodynamic inputs (used by both locked and normal paths)
+  const T = toKelvin(enc.temperatureF, project.units);
+  const acf = calcACF(project.elevation, project.units);
+  const Qreq_enc = volFt3 * (T_STD_K / T) * acf * FF_PREENG * SF_PREENG;
+
   let chosen: {
     size: "49L" | "80L";
     count: number;
@@ -432,8 +435,6 @@ function calcEnclosure(
 
     // O2 is not encoded in partcode; we can still compute it for display,
     // but it must NOT affect selection.
-    const T = toKelvin(enc.temperatureF, project.units);
-    const acf = calcACF(project.elevation, project.units);
     const o2 = calcOxygen(enc, project, safeCount, cylSpec.w_cyl, volFt3, acf);
 
     chosen = {
@@ -472,18 +473,22 @@ function calcEnclosure(
         ? overrideEmitters
         : 0;
 
-    const totalUsableLb = chosen.count * chosen.w_usable;
-    tActual = emitters > 0 ? totalUsableLb / (bundle.q_n2 * emitters) : 0;
+    tActual = emitters > 0 ? Qreq_enc / (bundle.q_n2 * emitters) : 0;
   } else {
-    // 3) Normal sizing mode (existing behavior)
-    chosen = pickCylinders(project, enc, volFt3, cyl49, {
-      minForFM49L: enc.designMethod === "FM Data Centers" ? 2 : 1,
-    });
+    // 3) Normal sizing mode — forward-solve (aligned with engineered calc)
+    // T, acf, Qreq_enc already computed above
 
-    if (chosen.size === "49L" && (chosen.o2 > 14.1 || chosen.count > 4)) {
-      chosen = pickCylinders(project, enc, volFt3, cyl80);
+    // Try 49L first
+    let spec = cyl49;
+    let fwdCount = Math.max(1, Math.ceil(Qreq_enc / spec.w_cyl));
+    if (enc.designMethod === "FM Data Centers")
+      fwdCount = Math.max(fwdCount, 2);
 
-      if (chosen.count > 8) {
+    // Physical limit: escalate to 80L if >4 cylinders
+    if (fwdCount > 4) {
+      spec = cyl80;
+      fwdCount = Math.max(1, Math.ceil(Qreq_enc / spec.w_cyl));
+      if (fwdCount > 8) {
         messages.push(
           statusFromCode("ENC.CYL_LIMIT", {
             systemId: sid,
@@ -492,19 +497,35 @@ function calcEnclosure(
           }),
         );
       }
-      if (chosen.o2 > 14.1) {
-        messages.push(
-          statusFromCode("ENC.O2_HIGH", {
-            systemId: sid,
-            zoneId: zid,
-            enclosureId: eid,
-          }),
-        );
-      }
     }
 
-    const solved = solveEmitters(enc, chosen);
-    if (!solved.ok) {
+    // O₂ is display-only — computed from what we actually provide
+    const o2 = calcOxygen(enc, project, fwdCount, spec.w_cyl, volFt3, acf);
+    if (o2 > 14.1) {
+      messages.push(
+        statusFromCode("ENC.O2_HIGH", {
+          systemId: sid,
+          zoneId: zid,
+          enclosureId: eid,
+        }),
+      );
+    }
+
+    chosen = {
+      size: spec.size,
+      count: fwdCount,
+      o2,
+      label: spec.label,
+      w_cyl: spec.w_cyl,
+      w_usable: spec.w_usable,
+    };
+
+    // Resolve bundle from user-selected nozzle, then compute emitters from flow
+    const resolvedBundle = pickBundleFromNozzle(enc);
+    if (!resolvedBundle) {
+      bundle = getMethodBundlesForEnclosure(enc)[0] ?? BUNDLES[0];
+      emitters = 0;
+      tActual = 0;
       messages.push(
         statusFromCode(
           "ENC.TIME_CONSTRAINT",
@@ -512,11 +533,41 @@ function calcEnclosure(
           { method: enc.designMethod },
         ),
       );
-    }
+    } else {
+      bundle = resolvedBundle;
+      const Qreq_flow = Qreq_enc / tExpected;
 
-    bundle = solved.bundle;
-    emitters = solved.emitters;
-    tActual = solved.tActualMin;
+      if (enc.designMethod === "FM Data Centers") {
+        emitters = Math.max(1, Math.floor(Qreq_flow / bundle.q_n2));
+      } else {
+        emitters = Math.max(1, Math.ceil(Qreq_flow / bundle.q_n2));
+      }
+
+      tActual = emitters > 0 ? Qreq_enc / (bundle.q_n2 * emitters) : 0;
+
+      // Discharge time validation (matching engineered-style warnings)
+      if (
+        enc.designMethod === "FM Data Centers" &&
+        tActual > 0 &&
+        tActual < 3.5
+      ) {
+        messages.push(
+          statusFromCode(
+            "ENC.FMDC_MIN_DISCHARGE",
+            { systemId: sid, zoneId: zid, enclosureId: eid },
+            { t_actual: tActual.toFixed(2) },
+          ),
+        );
+      } else if (tActual > 0 && tActual < 2.1) {
+        messages.push(
+          statusFromCode(
+            "ENC.NFPA_LOW_DISCHARGE",
+            { systemId: sid, zoneId: zid, enclosureId: eid },
+            { name: enc.name, t_est: tActual.toFixed(2) },
+          ),
+        );
+      }
+    }
   }
   if (bundle.op_psi == 25) {
     pushNote(enc, "Panel Pressure Setting: 32 psi.");
@@ -524,7 +575,10 @@ function calcEnclosure(
     pushNote(enc, "Panel Pressure Setting: 55 psi.");
   }
 
-  if (enc.nozzleOrientation && !bundle.allowedStyles.includes(enc.nozzleOrientation)) {
+  if (
+    enc.nozzleOrientation &&
+    !bundle.allowedStyles.includes(enc.nozzleOrientation)
+  ) {
     messages.push(
       statusFromCode("ENC.NOZZLE_STYLE", {
         systemId: sid,
@@ -594,13 +648,7 @@ function calcEnclosure(
     }
   }
   // 5) N2 requirement and water math for display
-  const qN2Req = calcReqNitrogenFlow(
-    volFt3,
-    enc.temperatureF,
-    project.units,
-    project.elevation,
-    tExpected,
-  );
+  const qN2Req = Qreq_enc / tExpected;
   const perEmitterGpm = bundle.q_water;
   const totalGpm = perEmitterGpm * emitters;
   const totalWaterGal = totalGpm * tActual;
@@ -685,47 +733,6 @@ function getCylinderSpec(
   return { size: "80L", w_cyl: 549, w_usable: 498, label: "80L @ 3000 psi" };
 }
 
-/** Compute a “back-solve” cylinder count to reach ~14% O₂ (legacy approach). */
-function pickCylinders(
-  project: Project,
-  enc: Enclosure,
-  volFt3: number,
-  spec: CylinderSpec,
-  opts?: { minForFM49L?: number },
-): {
-  size: CylinderSpec["size"];
-  count: number;
-  o2: number;
-  label: string;
-  w_cyl: number;
-  w_usable: number;
-} {
-  const T0 = 294.4;
-  const T = toKelvin(enc.temperatureF, project.units);
-  const acf = calcACF(project.elevation, project.units);
-
-  // legacy target O₂ ≈ 14%
-  const targetO2 = 14.0;
-  const n = Math.ceil(
-    Math.log(targetO2 / 20.95) * -((volFt3 * acf * T0) / (spec.w_cyl * T)),
-  );
-  let count = Math.max(0, n);
-
-  // FM DC with 49L ⇒ minimum 2 cylinders
-  if (opts?.minForFM49L && spec.size === "49L")
-    count = Math.max(count, opts.minForFM49L);
-
-  const o2 = calcOxygen(enc, project, count, spec.w_cyl, volFt3, acf);
-  return {
-    size: spec.size,
-    count,
-    o2,
-    label: spec.label,
-    w_cyl: spec.w_cyl,
-    w_usable: spec.w_usable,
-  };
-}
-
 function toKelvin(tempF: number, units: Units): number {
   return units === "imperial"
     ? ((tempF - 32) * 5) / 9 + 273.15
@@ -740,9 +747,9 @@ function calcOxygen(
   volFt3: number,
   acf: number,
 ): number {
-  const T0 = 294.4;
   const T = toKelvin(enc.temperatureF, project.units);
-  const val = 20.95 * Math.exp(-((nCyl * w_cyl) / (volFt3 * acf)) * (T / T0));
+  const val =
+    20.95 * Math.exp(-((nCyl * w_cyl) / (volFt3 * acf)) * (T / T_STD_K));
   return Math.round(val * 10) / 10; // 1-decimal rounding
 }
 
@@ -885,23 +892,6 @@ const BUNDLES: Bundle[] = [
   },
 ];
 
-/** Required N₂ rate (lb/min) to meet forward-flow over tExpected. */
-function calcReqNitrogenFlow(
-  volFt3: number,
-  tempF: number,
-  units: Units,
-  elevation: string,
-  tExpectedMin: number,
-): number {
-  const T0 = 294.4;
-  const T = toKelvin(tempF, units);
-  const acf = calcACF(elevation, units);
-  const FF = 0.375; // flooding factor baseline for pre-eng
-  const SF = 1.2;
-  const wN2Req = volFt3 * (T0 / T) * acf * FF * SF; // lb
-  return wN2Req / tExpectedMin; // lb/min
-}
-
 function formatMinutes(mins: number): string {
   return !isFinite(mins) || mins <= 0 ? "" : `${mins.toFixed(1)} min`;
 }
@@ -1023,80 +1013,6 @@ function checkFMSpacing(
   return true;
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              EMITTER SOLVER                                */
-/* -------------------------------------------------------------------------- */
-/** EMITTER SOLVER: choose bundle & integer emitter count to meet time windows */
-type SolveOk = {
-  ok: true;
-  bundle: Bundle;
-  emitters: number;
-  tActualMin: number;
-};
-type SolveFail = {
-  ok: false;
-  bundle: Bundle;
-  emitters: number;
-  tActualMin: number;
-  reason: "TOO_SHORT" | "TOO_LONG" | "ZERO_NOZZLES";
-  gap: number;
-};
-
-function solveForBundle(
-  method: Enclosure["designMethod"],
-  bundle: Bundle,
-  totalUsableLb: number,
-): SolveOk | SolveFail {
-  const tExp = getExpectedTime(method);
-  const q = bundle.q_n2;
-
-  if (method === "FM Data Centers") {
-    // FM DC: floor emitters, must meet t >= 3.5
-    const n = Math.floor(totalUsableLb / (q * tExp));
-    const t = n > 0 ? totalUsableLb / (q * n) : 0;
-    if (n > 0 && t >= tExp)
-      return { ok: true, bundle, emitters: n, tActualMin: t };
-    const reason = n <= 0 ? "ZERO_NOZZLES" : "TOO_SHORT";
-    const gap = n <= 0 ? tExp : Math.max(0, tExp - t);
-    return {
-      ok: false,
-      bundle,
-      emitters: Math.max(0, n),
-      tActualMin: t,
-      reason,
-      gap,
-    };
-  }
-
-  // NFPA A/C or B: need integer n with 2.1 ≤ t ≤ tExp
-  const tMin = 2.1;
-  const nMin = Math.ceil(totalUsableLb / (q * tExp));
-  const nMax = Math.floor(totalUsableLb / (q * tMin));
-
-  if (nMin > 0 && nMax >= nMin) {
-    const n = nMin; // smallest n that keeps t ≤ tExp
-    const t = totalUsableLb / (q * n);
-    return { ok: true, bundle, emitters: n, tActualMin: t };
-  }
-
-  // Infeasible: return nearest attempt toward tExp
-  const nTry = Math.max(1, nMin);
-  const tTry = totalUsableLb / (q * nTry);
-  let reason: SolveFail["reason"],
-    gap = 0;
-  if (tTry < tMin) {
-    reason = "TOO_SHORT";
-    gap = tMin - tTry;
-  } else if (tTry > tExp) {
-    reason = "TOO_LONG";
-    gap = tTry - tExp;
-  } else {
-    reason = "TOO_LONG";
-    gap = 0;
-  }
-  return { ok: false, bundle, emitters: nTry, tActualMin: tTry, reason, gap };
-}
-
 function getMethodBundlesForEnclosure(enc: Enclosure): Bundle[] {
   const all = BUNDLES.filter((b) => b.method === enc.designMethod);
 
@@ -1116,31 +1032,6 @@ function getMethodBundlesForEnclosure(enc: Enclosure): Bundle[] {
   return list;
 }
 
-function solveEmitters(
-  enc: Enclosure,
-  chosen: { count: number; w_usable: number },
-): SolveOk | SolveFail {
-  const totalUsable = chosen.count * chosen.w_usable;
-  const candidates = getMethodBundlesForEnclosure(enc);
-
-  let bestMiss: SolveFail | null = null;
-  for (const b of candidates) {
-    const res = solveForBundle(enc.designMethod, b, totalUsable);
-    if (res.ok) return res;
-    if ("gap" in res)
-      bestMiss = !bestMiss || res.gap < bestMiss.gap ? res : bestMiss;
-  }
-  return (
-    bestMiss ?? {
-      ok: false,
-      bundle: BUNDLES[0],
-      emitters: 0,
-      tActualMin: 0,
-      reason: "ZERO_NOZZLES",
-      gap: Infinity,
-    }
-  );
-}
 function pickBundleFromNozzle(enc: Enclosure): Bundle | null {
   if (!enc.nozzleModel || !enc.nozzleOrientation) return null;
 
